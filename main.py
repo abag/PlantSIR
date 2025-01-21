@@ -1,7 +1,8 @@
 import torch
 import numpy as np
+import h5py
 from neighbours import compute_NN
-from plotting import plot_grid
+from plotting import *
 from compartmentalABM import Grid, runABM
 from training import loss_function, save_infection_map, load_infection_map
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -41,6 +42,10 @@ def run_parameter_sweep():
     sigma_values = torch.linspace(sigma0_min_max[0], sigma0_min_max[1], sweep_num, device=device)
     gamma_values = torch.linspace(gamma0_min_max[0], gamma0_min_max[1], sweep_num, device=device)
 
+    print(beta_values.cpu().numpy())
+    print(sigma_values.cpu().numpy())
+    print(gamma_values.cpu().numpy())
+    return
     # Initialize loss array
     losses = np.zeros((sweep_num, sweep_num, sweep_num))
 
@@ -66,8 +71,52 @@ def run_parameter_sweep():
                 print(f"beta: {beta:.4f}, sigma: {sigma:.4f}, gamma: {gamma:.4f}, loss: {loss.item()}")
 
     # Save losses
-    np.save("parameter_sweep_losses.npy", losses)
-    print("Parameter sweep completed. Losses saved to 'parameter_sweep_losses.npy'.")
+    #np.save("parameter_sweep_losses.npy", losses)
+    #print("Parameter sweep completed. Losses saved to 'parameter_sweep_losses.npy'.")
+    # Save losses in HDF5 format
+    with h5py.File("parameter_sweep_losses.h5", "w") as hf:
+        hf.create_dataset("losses", data=losses)
+    print("Parameter sweep completed. Losses saved to 'parameter_sweep_losses.h5'.")
+def run_beta_sweep():
+    from params import N, M, n_timesteps, beta0, sigma0, gamma0, tau
+    from params import sweep_num, beta0_min_max
+
+    # Generate parameter ranges
+    beta_values = torch.linspace(beta0_min_max[0], beta0_min_max[1], sweep_num, device=device)
+    sigma = torch.tensor(sigma0, requires_grad=False, device=device)
+    gamma = torch.tensor(gamma0, requires_grad=False, device=device)
+
+    # Initialize loss array and gradients array
+    losses = np.zeros(sweep_num)
+    beta_gradients = np.zeros(sweep_num)
+
+    # Precompute nearest neighbors and sparse weight matrix
+    nearest_ind, nearest_dist = compute_NN(N, M, device=device)
+
+    # Reference infection map
+    ref_infection_map = load_infection_map('infection_map.pt', device=device)
+
+    for i, beta in enumerate(beta_values):
+        # Enable gradient tracking for beta
+        beta.requires_grad_(True)
+        # Initialize grid
+        grid = Grid(N, initial_infection_rate=0.02, device=device)
+        # Simulate model
+        grid = runABM(grid, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
+
+        # Compute loss
+        loss = loss_function(grid, ref_infection_map)
+        losses[i] = loss.item()
+        # Compute gradients
+        loss.backward()
+        beta_gradients[i] = beta.grad.item()
+        # Zero gradients to avoid accumulation in the next iteration
+        beta.grad = None
+
+    # Plot results
+    beta_values_np = beta_values.cpu().detach().numpy()
+    plot_beta_sweep(beta_values, losses, beta_gradients)
+
 
 from params import run_mode
 print(f"Running mode: {run_mode}")
@@ -75,5 +124,7 @@ if run_mode == 'single_shot':
     run_single_shot()
 elif run_mode == 'parameter_sweep':
     run_parameter_sweep()
+elif run_mode == 'beta_sweep':
+    run_beta_sweep()
 
 

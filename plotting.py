@@ -22,3 +22,37 @@ def plot_grid(grid, title_suffix=""):
     # Adjust layout
     plt.tight_layout()
     plt.show()
+
+def plot_beta_sweep(beta_values, losses, beta_gradients, save_path="beta_sweep.png"):
+    """
+    Plot the results of the parameter sweep.
+
+    Args:
+        beta_values (torch.Tensor): The range of beta values.
+        losses (np.ndarray): Losses corresponding to beta values.
+        beta_gradients (np.ndarray): Gradients of the loss w.r.t. beta.
+        save_path (str): Path to save the resulting plot image.
+    """
+    beta_values_np = beta_values.cpu().detach().numpy()
+
+    plt.figure(figsize=(10, 5))
+
+    # Loss plot
+    plt.subplot(1, 2, 1)
+    plt.plot(beta_values_np, losses, label="Loss")
+    plt.xlabel("Beta")
+    plt.ylabel("Loss")
+    plt.title("Loss vs Beta")
+    plt.legend()
+
+    # Gradient plot
+    plt.subplot(1, 2, 2)
+    plt.plot(beta_values_np, beta_gradients, label="d(Loss)/d(Beta)", color="orange")
+    plt.xlabel("Beta")
+    plt.ylabel("Gradient")
+    plt.title("Gradient of Loss w.r.t Beta")
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.show()

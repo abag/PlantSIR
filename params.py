@@ -1,4 +1,4 @@
-# Set the run mode: 'single_shot' or 'parameter_sweep'
+# Set the run mode
 run_mode = 'parameter_sweep'
 
 # Parameters for both modes
@@ -14,6 +14,6 @@ gamma0 = 0.01
 
 # Parameters for 'parameter_sweep' mode
 sweep_num = 6
-beta0_min_max = [0.001, 0.005]  # Range for beta
+beta0_min_max = [0.0001, 0.005]  # Range for beta
 sigma0_min_max = [3.5, 4.5]    # Range for sigma
 gamma0_min_max = [0.005, 0.015] # Range for gamma
