@@ -77,18 +77,30 @@ def run_parameter_sweep():
     with h5py.File("parameter_sweep_losses.h5", "w") as hf:
         hf.create_dataset("losses", data=losses)
     print("Parameter sweep completed. Losses saved to 'parameter_sweep_losses.h5'.")
-def run_beta_sweep():
-    from params import N, M, n_timesteps, beta0, sigma0, gamma0, tau
-    from params import sweep_num, beta0_min_max
 
-    # Generate parameter ranges
-    beta_values = torch.linspace(beta0_min_max[0], beta0_min_max[1], sweep_num, device=device)
-    sigma = torch.tensor(sigma0, requires_grad=False, device=device)
-    gamma = torch.tensor(gamma0, requires_grad=False, device=device)
+def run_parameter_sweep():
+    from params import N, M, n_timesteps, tau, sweep_num
+    from params import beta0, sigma0, gamma0, beta0_min_max, sigma0_min_max, gamma0_min_max, param_sweep_var
 
-    # Initialize loss array and gradients array
+    # Select the parameter to sweep
+    if param_sweep_var == 'beta':
+        sweep_values = torch.linspace(beta0_min_max[0], beta0_min_max[1], sweep_num, device=device)
+        sigma = torch.tensor(sigma0, requires_grad=False, device=device)
+        gamma = torch.tensor(gamma0, requires_grad=False, device=device)
+    elif param_sweep_var == 'sigma':
+        sweep_values = torch.linspace(sigma0_min_max[0], sigma0_min_max[1], sweep_num, device=device)
+        beta = torch.tensor(beta0, requires_grad=False, device=device)
+        gamma = torch.tensor(gamma0, requires_grad=False, device=device)
+    elif param_sweep_var == 'gamma':
+        sweep_values = torch.linspace(gamma0_min_max[0], gamma0_min_max[1], sweep_num, device=device)
+        beta = torch.tensor(beta0, requires_grad=False, device=device)
+        sigma = torch.tensor(sigma0, requires_grad=False, device=device)
+    else:
+        raise ValueError(f"Invalid parameter to sweep: {param_sweep_var}. Choose 'beta', 'sigma', or 'gamma'.")
+
+    # Initialize loss array and gradient array
     losses = np.zeros(sweep_num)
-    beta_gradients = np.zeros(sweep_num)
+    gradients = np.zeros(sweep_num)
 
     # Precompute nearest neighbors and sparse weight matrix
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
@@ -96,9 +108,15 @@ def run_beta_sweep():
     # Reference infection map
     ref_infection_map = load_infection_map('infection_map.pt', device=device)
 
-    for i, beta in enumerate(beta_values):
-        # Enable gradient tracking for beta
-        beta.requires_grad_(True)
+    for i, value in enumerate(sweep_values):
+        # Explicit handling for the parameter being swept
+        if param_sweep_var == 'beta':
+            beta = value.clone().detach().requires_grad_(True)
+        elif param_sweep_var == 'sigma':
+            sigma = value.clone().detach().requires_grad_(True)
+        elif param_sweep_var == 'gamma':
+            gamma = value.clone().detach().requires_grad_(True)
+
         # Initialize grid
         grid = Grid(N, initial_infection_rate=0.02, device=device)
         # Simulate model
@@ -107,16 +125,26 @@ def run_beta_sweep():
         # Compute loss
         loss = loss_function(grid, ref_infection_map)
         losses[i] = loss.item()
-        # Compute gradients
+
+        # Compute gradients explicitly for the selected parameter
         loss.backward()
-        beta_gradients[i] = beta.grad.item()
-        # Zero gradients to avoid accumulation in the next iteration
-        beta.grad = None
+        if param_sweep_var == 'beta' and beta.grad is not None:
+            gradients[i] = beta.grad.item()
+        elif param_sweep_var == 'sigma' and sigma.grad is not None:
+            gradients[i] = sigma.grad.item()
+        elif param_sweep_var == 'gamma' and gamma.grad is not None:
+            gradients[i] = gamma.grad.item()
+
+        # Clear gradients for the next iteration
+        if param_sweep_var == 'beta':
+            beta.grad = None
+        elif param_sweep_var == 'sigma':
+            sigma.grad = None
+        elif param_sweep_var == 'gamma':
+            gamma.grad = None
 
     # Plot results
-    beta_values_np = beta_values.cpu().detach().numpy()
-    plot_beta_sweep(beta_values, losses, beta_gradients)
-
+    plot_parameter_sweep(sweep_values, losses, gradients, param_sweep_var)
 
 from params import run_mode
 print(f"Running mode: {run_mode}")

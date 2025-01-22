@@ -23,36 +23,38 @@ def plot_grid(grid, title_suffix=""):
     plt.tight_layout()
     plt.show()
 
-def plot_beta_sweep(beta_values, losses, beta_gradients, save_path="beta_sweep.png"):
+def plot_parameter_sweep(sweep_values, losses, gradients, param_name, save_path="parameter_sweep.png"):
     """
     Plot the results of the parameter sweep.
 
     Args:
-        beta_values (torch.Tensor): The range of beta values.
-        losses (np.ndarray): Losses corresponding to beta values.
-        beta_gradients (np.ndarray): Gradients of the loss w.r.t. beta.
+        sweep_values (torch.Tensor): The range of parameter values.
+        losses (np.ndarray): Losses corresponding to the sweep values.
+        gradients (np.ndarray): Gradients of the loss w.r.t. the parameter.
+        param_name (str): Name of the parameter being swept.
         save_path (str): Path to save the resulting plot image.
     """
-    beta_values_np = beta_values.cpu().detach().numpy()
+    sweep_values_np = sweep_values.cpu().detach().numpy()
 
     plt.figure(figsize=(10, 5))
 
     # Loss plot
     plt.subplot(1, 2, 1)
-    plt.plot(beta_values_np, losses, label="Loss")
-    plt.xlabel("Beta")
+    plt.plot(sweep_values_np, losses, label="Loss")
+    plt.xlabel(f"{param_name.capitalize()}")
     plt.ylabel("Loss")
-    plt.title("Loss vs Beta")
+    plt.title(f"Loss vs {param_name.capitalize()}")
     plt.legend()
 
     # Gradient plot
     plt.subplot(1, 2, 2)
-    plt.plot(beta_values_np, beta_gradients, label="d(Loss)/d(Beta)", color="orange")
-    plt.xlabel("Beta")
+    plt.plot(sweep_values_np, gradients, label=f"d(Loss)/d({param_name.capitalize()})", color="orange")
+    plt.xlabel(f"{param_name.capitalize()}")
     plt.ylabel("Gradient")
-    plt.title("Gradient of Loss w.r.t Beta")
+    plt.title(f"Gradient of Loss w.r.t {param_name.capitalize()}")
     plt.legend()
 
     plt.tight_layout()
     plt.savefig(save_path)
     plt.show()
+
