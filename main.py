@@ -4,7 +4,7 @@ import h5py
 from neighbours import compute_NN
 from plotting import *
 from compartmentalABM import Grid, runABM
-from training import loss_function, save_infection_map, load_infection_map
+from training import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def run_single_shot():
@@ -14,18 +14,21 @@ def run_single_shot():
     sigma = torch.tensor(sigma0, requires_grad=True, device=device)
     gamma = torch.tensor(gamma0, requires_grad=True, device=device)
     # Initialize grid
-    grid = Grid(N, initial_infection_rate=0.02, device=device)
+    #I_0 = get_I_0(N, device, center=(N//2, N//2), sigma=10, infection_rate=0.01)
+    I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
+    grid = Grid(N, I_0, device)
     # Precompute nearest neighbors and sparse weight matrix
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
     # Simulate model
     grid = runABM(grid, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
 
     # Compute loss
-    ref_infection_map = load_infection_map('infection_map.pt', device=device)
+    ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
     loss = loss_function(grid, ref_infection_map)
     loss.backward()
 
-    plot_grid(grid)
+    #plot_grid(grid)
+    plot_grid_and_ref(grid, I_0, ref_infection_map)
     print(f"Loss: {loss.item()}")
     print(f"Gradient wrt beta: {beta.grad}")
     print(f"Gradient wrt sigma: {sigma.grad}")
@@ -78,7 +81,7 @@ def run_parameter_sweep():
         hf.create_dataset("losses", data=losses)
     print("Parameter sweep completed. Losses saved to 'parameter_sweep_losses.h5'.")
 
-def run_parameter_sweep():
+def run_beta_sweep():
     from params import N, M, n_timesteps, tau, sweep_num
     from params import beta0, sigma0, gamma0, beta0_min_max, sigma0_min_max, gamma0_min_max, param_sweep_var
 
@@ -106,7 +109,7 @@ def run_parameter_sweep():
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
 
     # Reference infection map
-    ref_infection_map = load_infection_map('infection_map.pt', device=device)
+    ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
 
     for i, value in enumerate(sweep_values):
         # Explicit handling for the parameter being swept
@@ -118,7 +121,8 @@ def run_parameter_sweep():
             gamma = value.clone().detach().requires_grad_(True)
 
         # Initialize grid
-        grid = Grid(N, initial_infection_rate=0.02, device=device)
+        I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
+        grid = Grid(N, I_0, device)
         # Simulate model
         grid = runABM(grid, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
 

@@ -1,41 +1,23 @@
 import torch
 class Grid:
-    def __init__(self, N, initial_infection_rate=0.01, requires_grad=True, device='cpu', center=None, sigma=10.0):
+    def __init__(self, N, initial_infection_map, device="cpu"):
         """
-        Initialize the grid with compartments S, I, R, where the probability
-        of being infected falls off as exp(-r^2 / sigma^2) from a center point.
+        Initializes the grid with a given reference infection field.
 
         Args:
-            N (int): The grid size (NxN).
-            initial_infection_rate (float): Baseline infection probability.
-            requires_grad (bool): Whether gradients should be tracked for the grid.
-            device (str or torch.device): The device to store the grid (e.g., 'cpu' or 'cuda').
-            center (tuple): The (x, y) coordinates of the infection center. Defaults to the grid center.
-            sigma (float): Controls the spread of infection from the center.
+            N (int): Grid size.
+            initial_infection_map (torch.Tensor): N x N tensor representing initial infections.
+            device (str): Computation device ('cpu' or 'cuda').
         """
         self.N = N
-        self.requires_grad = requires_grad
         self.device = device
 
-        # Default center is the grid center
-        if center is None:
-            center = (N // 2, N // 2)
+        # Ensure initial_infection_map is a float tensor and clipped to valid range
+        initial_I = initial_infection_map.to(device).float().clamp(0, 1)
+        initial_S = 1 - initial_I  # Susceptible is the complement of I
+        initial_R = torch.zeros(N, N, device=device)  # No recovered initially
 
-        # Create coordinate grid
-        x = torch.arange(N, device=device).float()
-        y = torch.arange(N, device=device).float()
-        xx, yy = torch.meshgrid(x, y, indexing='ij')
-        distances_squared = (xx - center[0])**2 + (yy - center[1])**2
-
-        # Calculate infection probabilities
-        infection_probs = torch.exp(-distances_squared / (sigma**2))
-
-        # Sample initial infections
-        initial_I = (torch.rand(N, N, device=device) < infection_probs).float()
-        initial_S = torch.ones(N, N, device=device) - initial_I
-        initial_R = torch.zeros(N, N, device=device)
-
-        # Combine into a single tensor
+        # Stack S, I, R into a single grid tensor
         self.grid = torch.stack([initial_S, initial_I, initial_R], dim=-1)
 
     @property
