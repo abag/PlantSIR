@@ -1,6 +1,6 @@
 # Set the run mode
-run_mode = 'beta_sweep'
-
+run_mode = 'optimize'
+#run_mode = 'single_shot'
 # Parameters for both modes
 N = 128
 M = 250
@@ -8,9 +8,10 @@ n_timesteps = 25
 tau = 0.1
 
 # Parameters for 'single_shot' mode
-beta0 = 0.01
-sigma0 = 4.0
-gamma0 = 0.01
+alpha0 = 2.0
+beta0 = 0.012036188505589962
+sigma0 = 4.981135845184326
+gamma0 = 0.013169771060347557
 
 # Parameters for 'parameter_sweep' mode
 sweep_num = 50

@@ -24,6 +24,11 @@ df_ldn_2022 = df_ldn[df_ldn['Year']==2022]
 # Get the bounding box (min/max Easting & Northing)
 min_east, max_east = 500000, 540000
 min_north, max_north = 160000, 200000
+padding = 5000
+min_east -= padding
+min_north -= padding
+max_east += padding
+max_north += padding
 
 # Calculate the spatial extent (size of the bounding box)
 width = max_east - min_east
@@ -58,7 +63,7 @@ grid = torch.zeros((N, N), dtype=torch.float32)
 
 # Scale the Easting/Northing values to fit into the N x N grid
 # Normalize the Easting and Northing values to [0, N-1]
-for _, row in df_ldn_2022.iterrows():
+for _, row in df_ldn.iterrows():
     easting, northing = row["Easting"], row["Northing"]
 
     # Scale coordinates to fit into the grid (from [min, max] to [0, N-1])

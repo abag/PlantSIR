@@ -60,12 +60,12 @@ class Grid:
                 f"I_sum={torch.sum(self.I).item()}, "
                 f"R_sum={torch.sum(self.R).item()})")
 
-def compute_sparse_weight_matrix(nearest_distances, beta, sigma):
+def compute_sparse_weight_matrix(nearest_distances, alpha, beta, sigma):
     """
     Compute the sparse weight matrix using the formula:
     weight = β * exp(-r^2 / σ^2)
     """
-    return beta * torch.exp(-nearest_distances**2 / sigma**2)
+    return beta * torch.exp(-(nearest_distances / sigma) ** alpha)
 
 def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N, M):
     """
@@ -75,14 +75,14 @@ def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N
     zeta_flat = torch.einsum('ij,ij->i', infected_neighbors, sparse_weights)  # Efficient weighted sum
     return zeta_flat.view(N, N)  # Reshape zeta back to grid shape
 
-def runABM(grid, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau=0.1):
+def runABM(grid, alpha, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau=0.1):
     """
     Simulate the random walk with infection spread using the Grid class.
     """
     N = grid.N
     for _ in range(n_timesteps - 1):
         # Compute force of infection
-        sparse_weights = compute_sparse_weight_matrix(nearest_dist, beta, sigma)
+        sparse_weights = compute_sparse_weight_matrix(nearest_dist, alpha, beta, sigma)
         infected_flat = grid.I.view(-1)  # Flatten grid to (N^2,)
         zeta = compute_force_of_infection(nearest_ind, sparse_weights, infected_flat, N, nearest_ind.shape[1])
 

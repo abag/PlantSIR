@@ -7,9 +7,61 @@ from compartmentalABM import Grid, runABM
 from training import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def run_single_shot():
-    from params import N, M, n_timesteps, beta0, sigma0, gamma0, tau
+import math
+import torch
 
+
+def run_optimize(num_iterations=1000, lr=0.1):
+    from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, tau
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Initialize log-parameters so they remain positive.
+    log_alpha = torch.tensor(math.log(alpha0), requires_grad=True, device=device)
+    log_beta = torch.tensor(math.log(beta0), requires_grad=True, device=device)
+    log_sigma = torch.tensor(math.log(sigma0), requires_grad=True, device=device)
+    log_gamma = torch.tensor(math.log(gamma0), requires_grad=True, device=device)
+
+    # Precompute nearest neighbors once
+    nearest_ind, nearest_dist = compute_NN(N, M, device=device)
+
+    # Use Adam to optimize the log-parameters
+    optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma], lr=lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+                                                           factor=0.5, patience=50)
+    # Load the reference infection map once
+    ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
+
+    for epoch in range(num_iterations):
+        optimizer.zero_grad()
+
+        # Convert log-parameters back to positive values
+        alpha = torch.exp(log_alpha)
+        beta = torch.exp(log_beta)
+        sigma = torch.exp(log_sigma)
+        gamma = torch.exp(log_gamma)
+
+        # Initialize grid and simulate model
+        I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
+        grid = Grid(N, I_0, device)
+        grid = runABM(grid, alpha, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
+
+        # Compute loss (mean squared error between simulated and reference infection maps)
+        loss = loss_function(grid, ref_infection_map, loss_type='jaccard')
+
+        # Backpropagation and optimization step
+        loss.backward()
+        optimizer.step()
+        scheduler.step(loss.item())
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch}: Loss={loss.item()}, alpha={alpha.item()}, beta={beta.item()}, sigma={sigma.item()}, gamma={gamma.item()}, lr={scheduler.get_last_lr()[0]}")
+
+    # Return the optimized parameters (converted from log-space)
+    return torch.exp(log_alpha).item(), torch.exp(log_beta).item(), torch.exp(log_sigma).item(), torch.exp(log_gamma).item()
+
+
+def run_single_shot():
+    from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, tau
+    alpha = torch.tensor(alpha0, requires_grad=True, device=device)
     beta = torch.tensor(beta0, requires_grad=True, device=device)
     sigma = torch.tensor(sigma0, requires_grad=True, device=device)
     gamma = torch.tensor(gamma0, requires_grad=True, device=device)
@@ -20,7 +72,7 @@ def run_single_shot():
     # Precompute nearest neighbors and sparse weight matrix
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
     # Simulate model
-    grid = runABM(grid, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
+    grid = runABM(grid, alpha, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
 
     # Compute loss
     ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
@@ -30,6 +82,7 @@ def run_single_shot():
     #plot_grid(grid)
     plot_grid_and_ref(grid, I_0, ref_infection_map)
     print(f"Loss: {loss.item()}")
+    print(f"Gradient wrt alpha: {alpha.grad}")
     print(f"Gradient wrt beta: {beta.grad}")
     print(f"Gradient wrt sigma: {sigma.grad}")
     print(f"Gradient wrt gamma: {gamma.grad}")
@@ -154,6 +207,8 @@ from params import run_mode
 print(f"Running mode: {run_mode}")
 if run_mode == 'single_shot':
     run_single_shot()
+if run_mode == 'optimize':
+        run_optimize()
 elif run_mode == 'parameter_sweep':
     run_parameter_sweep()
 elif run_mode == 'beta_sweep':

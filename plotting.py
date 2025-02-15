@@ -8,17 +8,18 @@ def plot_grid_and_ref(grid, initial_infection, ref_infection_map, title_suffix="
     im0 = axes[0, 0].imshow(initial_infection.cpu().detach().numpy(), cmap='plasma')
     axes[0, 0].set_title(f"Initial Infection (I) {title_suffix}")
     plt.colorbar(im0, ax=axes[0, 0])
+    axes[0, 0].set_aspect('equal')
 
     # Plot Reference Infection Map
     im1 = axes[0, 1].imshow(ref_infection_map.cpu().detach().numpy(), cmap='plasma')
     axes[0, 1].set_title(f"Reference Infection Map {title_suffix}")
     plt.colorbar(im1, ax=axes[0, 1])
-
+    axes[0, 1].set_aspect('equal')
     # Plot Final Infected (I)
     im2 = axes[0, 2].imshow(grid.I.cpu().detach().numpy(), cmap='plasma')
     axes[0, 2].set_title(f"Final Infected (I) {title_suffix}")
     plt.colorbar(im2, ax=axes[0, 2])
-
+    axes[0, 2].set_aspect('equal')
     # Plot Susceptible (S)
     im3 = axes[1, 0].imshow(grid.S.cpu().detach().numpy(), cmap='viridis')
     axes[1, 0].set_title(f"Susceptible (S) {title_suffix}")
