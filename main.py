@@ -1,20 +1,14 @@
 import torch
 import numpy as np
 import h5py
+import math
 from neighbours import compute_NN
 from plotting import *
 from compartmentalABM import Grid, runABM
 from training import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-import math
-import torch
-
-
-def run_optimize(num_iterations=1000, lr=0.1):
+def run_optimize(num_epoch=1000, num_ensemble= 3, lr=0.01):
     from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, tau
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     # Initialize log-parameters so they remain positive.
     log_alpha = torch.tensor(math.log(alpha0), requires_grad=True, device=device)
     log_beta = torch.tensor(math.log(beta0), requires_grad=True, device=device)
@@ -31,7 +25,7 @@ def run_optimize(num_iterations=1000, lr=0.1):
     # Load the reference infection map once
     ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
 
-    for epoch in range(num_iterations):
+    for epoch in range(num_epoch):
         optimizer.zero_grad()
 
         # Convert log-parameters back to positive values
@@ -39,15 +33,15 @@ def run_optimize(num_iterations=1000, lr=0.1):
         beta = torch.exp(log_beta)
         sigma = torch.exp(log_sigma)
         gamma = torch.exp(log_gamma)
-
-        # Initialize grid and simulate model
-        I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
-        grid = Grid(N, I_0, device)
-        grid = runABM(grid, alpha, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
-
+        loss = 0
+        for _ in range(num_ensemble):
+          # Initialize grid and simulate model
+          I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
+          grid = Grid(N, I_0, device)
+          grid = runABM(grid, alpha, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
+          loss += loss_function(grid, ref_infection_map, loss_type='dice')
         # Compute loss (mean squared error between simulated and reference infection maps)
-        loss = loss_function(grid, ref_infection_map, loss_type='jaccard')
-
+        loss = loss / num_ensemble
         # Backpropagation and optimization step
         loss.backward()
         optimizer.step()
@@ -57,7 +51,6 @@ def run_optimize(num_iterations=1000, lr=0.1):
 
     # Return the optimized parameters (converted from log-space)
     return torch.exp(log_alpha).item(), torch.exp(log_beta).item(), torch.exp(log_sigma).item(), torch.exp(log_gamma).item()
-
 
 def run_single_shot():
     from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, tau

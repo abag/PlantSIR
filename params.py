@@ -8,10 +8,10 @@ n_timesteps = 25
 tau = 0.1
 
 # Parameters for 'single_shot' mode
-alpha0 = 2.0
-beta0 = 0.012036188505589962
-sigma0 = 4.981135845184326
-gamma0 = 0.013169771060347557
+alpha0 = 1.5
+beta0 = 0.01
+sigma0 = 4.0
+gamma0 = 0.00001
 
 # Parameters for 'parameter_sweep' mode
 sweep_num = 50

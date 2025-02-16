@@ -15,20 +15,16 @@ df = pd.read_excel('./data_sets/OPM_SurveyData_2006_2023 copy.xlsx')
 
 df = df[df['Status']=='Infested']
 df_ldn = df.copy()
-df_ldn = df_ldn[df_ldn['Easting']>500000]
-df_ldn = df_ldn[df_ldn['Easting']<540000]
-df_ldn = df_ldn[df_ldn['Northing']>160000]
-df_ldn = df_ldn[df_ldn['Northing']<200000]
+df_ldn = df_ldn[df_ldn['Easting']>470000]
+df_ldn = df_ldn[df_ldn['Easting']<570000]
+df_ldn = df_ldn[df_ldn['Northing']>130000]
+df_ldn = df_ldn[df_ldn['Northing']<230000]
 df_ldn_2006 = df_ldn[df_ldn['Year']==2006]
 df_ldn_2022 = df_ldn[df_ldn['Year']==2022]
 # Get the bounding box (min/max Easting & Northing)
-min_east, max_east = 500000, 540000
-min_north, max_north = 160000, 200000
-padding = 5000
-min_east -= padding
-min_north -= padding
-max_east += padding
-max_north += padding
+min_east, max_east = 470000, 570000
+min_north, max_north = 130000, 230000
+
 
 # Calculate the spatial extent (size of the bounding box)
 width = max_east - min_east
