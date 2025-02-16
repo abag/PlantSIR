@@ -39,7 +39,7 @@ def run_optimize(num_epoch=1000, num_ensemble= 3, lr=0.01):
           I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
           grid = Grid(N, I_0, device)
           grid = runABM(grid, alpha, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
-          loss += loss_function(grid, ref_infection_map, loss_type='dice')
+          loss += loss_function(grid, ref_infection_map, loss_type='lcosh_dice')
         # Compute loss (mean squared error between simulated and reference infection maps)
         loss = loss / num_ensemble
         # Backpropagation and optimization step

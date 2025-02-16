@@ -37,5 +37,10 @@ def loss_function(grid, ref_infection_map, loss_type="dice"):
         union = torch.sum(I_pred + I_ref) - intersection
         jaccard_index = (intersection + 1e-6) / (union + 1e-6)  # Add epsilon for numerical stability
         return 1 - jaccard_index  # Jaccard loss (minimizing means maximizing Jaccard index)
+    elif loss_type == "lcosh_dice":
+        intersection = torch.sum(I_pred * I_ref)
+        union = torch.sum(I_pred) + torch.sum(I_ref)
+        dice_coeff = (2.0 * intersection + 1e-6) / (union + 1e-6)
+        return torch.log(torch.cosh(1 - dice_coeff))  # Log-cosh transformation
     else:
         raise ValueError(f"Invalid loss_type '{loss_type}'. Choose from 'sum_of_squares', 'dice', or 'jaccard'.")
