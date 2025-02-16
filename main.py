@@ -24,7 +24,8 @@ def run_optimize(num_epoch=1000, num_ensemble= 3, lr=0.01):
                                                            factor=0.5, patience=50)
     # Load the reference infection map once
     ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
-
+    # Load the initial infection sites
+    I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
     for epoch in range(num_epoch):
         optimizer.zero_grad()
 
@@ -36,7 +37,6 @@ def run_optimize(num_epoch=1000, num_ensemble= 3, lr=0.01):
         loss = 0
         for _ in range(num_ensemble):
           # Initialize grid and simulate model
-          I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
           grid = Grid(N, I_0, device)
           grid = runABM(grid, alpha, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
           loss += loss_function(grid, ref_infection_map, loss_type='lcosh_dice')
@@ -129,9 +129,10 @@ def run_parameter_sweep():
 
 def run_beta_sweep():
     from params import N, M, n_timesteps, tau, sweep_num
-    from params import beta0, sigma0, gamma0, beta0_min_max, sigma0_min_max, gamma0_min_max, param_sweep_var
+    from params import alpha0, beta0, sigma0, gamma0, beta0_min_max, sigma0_min_max, gamma0_min_max, param_sweep_var
 
     # Select the parameter to sweep
+    alpha = torch.tensor(alpha0, requires_grad=False, device=device) #needs fxing so it can be used
     if param_sweep_var == 'beta':
         sweep_values = torch.linspace(beta0_min_max[0], beta0_min_max[1], sweep_num, device=device)
         sigma = torch.tensor(sigma0, requires_grad=False, device=device)
@@ -154,9 +155,10 @@ def run_beta_sweep():
     # Precompute nearest neighbors and sparse weight matrix
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
 
-    # Reference infection map
+    # Load the reference infection map once
     ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
-
+    # Load the initial infection sites
+    I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
     for i, value in enumerate(sweep_values):
         # Explicit handling for the parameter being swept
         if param_sweep_var == 'beta':
@@ -167,13 +169,12 @@ def run_beta_sweep():
             gamma = value.clone().detach().requires_grad_(True)
 
         # Initialize grid
-        I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
         grid = Grid(N, I_0, device)
         # Simulate model
-        grid = runABM(grid, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
+        grid = runABM(grid, alpha, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
 
         # Compute loss
-        loss = loss_function(grid, ref_infection_map)
+        loss = loss_function(grid, ref_infection_map,loss_type='lcosh_dice')
         losses[i] = loss.item()
 
         # Compute gradients explicitly for the selected parameter
