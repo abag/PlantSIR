@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
-
-
+import cv2
+import numpy as np
 def plot_grid_and_ref(grid, initial_infection, ref_infection_map, title_suffix=""):
     fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 
@@ -20,11 +20,13 @@ def plot_grid_and_ref(grid, initial_infection, ref_infection_map, title_suffix="
     axes[0, 2].set_title(f"Final Infected (I) {title_suffix}")
     plt.colorbar(im2, ax=axes[0, 2])
     axes[0, 2].set_aspect('equal')
+    edges = cv2.Canny(grid.I.cpu().detach().numpy().astype(np.uint8) * 255, 100, 200)
+    axes[0, 2].imshow(edges, cmap='gray',alpha=0.7)  # Adjust alpha for better visibility
+
     # Plot Susceptible (S)
     im3 = axes[1, 0].imshow(grid.S.cpu().detach().numpy(), cmap='viridis')
     axes[1, 0].set_title(f"Susceptible (S) {title_suffix}")
     plt.colorbar(im3, ax=axes[1, 0])
-
     # Plot Recovered (R)
     im4 = axes[1, 1].imshow(grid.R.cpu().detach().numpy(), cmap='cividis')
     axes[1, 1].set_title(f"Recovered (R) {title_suffix}")

@@ -60,14 +60,44 @@ class Grid:
                 f"I_sum={torch.sum(self.I).item()}, "
                 f"R_sum={torch.sum(self.R).item()})")
 
-def compute_sparse_weight_matrix(nearest_distances, alpha, beta, sigma):
+def compute_sparse_weight_matri_old(nearest_distances, alpha, beta, sigma):
     """
     Compute the sparse weight matrix using the formula:
     weight = β * exp(-r^2 / σ^2)
     """
     return beta * torch.exp(-(nearest_distances / sigma) ** alpha)
 
-def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N, M):
+import torch
+
+def compute_sparse_weight_matrix(nearest_distances, nearest_indices, alpha, beta, sigma, phi, advV, N, M):
+
+    # Convert the angle phi to a unit vector direction
+    phi_vector = torch.stack([torch.cos(phi), torch.sin(phi)], dim=0).to(nearest_distances.device)
+
+    # Get coordinates of the grid points (flattened)
+    x = torch.arange(N, device=nearest_distances.device).float()
+    y = torch.arange(N, device=nearest_distances.device).float()
+    xx, yy = torch.meshgrid(x, y, indexing='ij')
+    coords = torch.stack((xx, yy), dim=-1).view(-1, 2)  # Shape: (N^2, 2)
+
+    # For each cell, compute the vector to its nearest neighbors
+    neighbors_coords = coords[nearest_indices.view(-1)].view(N**2, M, 2)  # Shape: (N^2, M, 2)
+    distance_vectors = neighbors_coords - coords.view(-1, 1, 2)  # Shape: (N^2, M, 2)
+
+    # Compute the angle between the distance vector and the phi direction
+    dot_product = torch.einsum('ijk,k->ij', distance_vectors, phi_vector)  # Shape: (N^2, M)
+    norms = torch.norm(distance_vectors, dim=-1)  # Shape: (N^2, M)
+    cos_theta = dot_product / (norms * torch.norm(phi_vector))  # Cosine of angle between vectors
+
+    # Apply anisotropic scaling: increase or decrease distance based on alignment with phi
+    anisotropic_factor = 1 + advV*abs(cos_theta)  # You can modify this scaling function as needed
+    adjusted_distances = nearest_distances/anisotropic_factor
+
+    # Now compute the weight matrix using the adjusted distances
+    return beta * torch.exp(-(adjusted_distances / sigma) ** alpha)
+
+
+def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N):
     """
     Compute the force of infection (zeta) for all cells using batched operations.
     """
@@ -75,16 +105,17 @@ def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N
     zeta_flat = torch.einsum('ij,ij->i', infected_neighbors, sparse_weights)  # Efficient weighted sum
     return zeta_flat.view(N, N)  # Reshape zeta back to grid shape
 
-def runABM(grid, alpha, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau=0.1):
+def runABM(grid, alpha, beta, sigma, gamma, phi, advV, n_timesteps, nearest_ind, nearest_dist, tau=0.1):
     """
     Simulate the random walk with infection spread using the Grid class.
     """
     N = grid.N
     for _ in range(n_timesteps - 1):
         # Compute force of infection
-        sparse_weights = compute_sparse_weight_matrix(nearest_dist, alpha, beta, sigma)
+        #sparse_weights = compute_sparse_weight_matrix(nearest_dist, alpha, beta, sigma)
+        sparse_weights = compute_sparse_weight_matrix(nearest_dist, nearest_ind, alpha, beta, sigma, phi, advV, N, nearest_ind.shape[1])
         infected_flat = grid.I.view(-1)  # Flatten grid to (N^2,)
-        zeta = compute_force_of_infection(nearest_ind, sparse_weights, infected_flat, N, nearest_ind.shape[1])
+        zeta = compute_force_of_infection(nearest_ind, sparse_weights, infected_flat, N)
 
         # Compute infection probability (S → I)
         P_inf = 1 - torch.exp(-zeta) + 1e-10  # Ensure numerical stability
