@@ -60,7 +60,7 @@ class Grid:
                 f"I_sum={torch.sum(self.I).item()}, "
                 f"R_sum={torch.sum(self.R).item()})")
 
-def compute_sparse_weight_matri_old(nearest_distances, alpha, beta, sigma):
+def compute_sparse_weight_matrix_old(nearest_distances, alpha, beta, sigma):
     """
     Compute the sparse weight matrix using the formula:
     weight = β * exp(-r^2 / σ^2)
@@ -96,7 +96,6 @@ def compute_sparse_weight_matrix(nearest_distances, nearest_indices, alpha, beta
     # Now compute the weight matrix using the adjusted distances
     return beta * torch.exp(-(adjusted_distances / sigma) ** alpha)
 
-
 def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N):
     """
     Compute the force of infection (zeta) for all cells using batched operations.
@@ -105,7 +104,7 @@ def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N
     zeta_flat = torch.einsum('ij,ij->i', infected_neighbors, sparse_weights)  # Efficient weighted sum
     return zeta_flat.view(N, N)  # Reshape zeta back to grid shape
 
-def runABM(grid, alpha, beta, sigma, gamma, phi, advV, n_timesteps, nearest_ind, nearest_dist, tau=0.1):
+def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho0, n_timesteps, nearest_ind, nearest_dist, plant_map, tau=0.1):
     """
     Simulate the random walk with infection spread using the Grid class.
     """
@@ -117,6 +116,9 @@ def runABM(grid, alpha, beta, sigma, gamma, phi, advV, n_timesteps, nearest_ind,
         infected_flat = grid.I.view(-1)  # Flatten grid to (N^2,)
         zeta = compute_force_of_infection(nearest_ind, sparse_weights, infected_flat, N)
 
+        sigmoid_plant = 1.0 / (1 + torch.exp(-l_rho0*(plant_map - rho)))
+        # Modify zeta by the plant map (element-wise multiplication)
+        zeta = zeta * sigmoid_plant
         # Compute infection probability (S → I)
         P_inf = 1 - torch.exp(-zeta) + 1e-10  # Ensure numerical stability
 
@@ -128,7 +130,6 @@ def runABM(grid, alpha, beta, sigma, gamma, phi, advV, n_timesteps, nearest_ind,
 
         # Compute recovery probability (I → R)
         P_rec = gamma * torch.ones_like(grid.I)  # Create a tensor matching the shape of grid.I
-
 
         # Gumbel-Softmax for I → R transitions
         logits_I = torch.stack([P_rec, 1 - P_rec], dim=-1).log()

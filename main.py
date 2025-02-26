@@ -8,7 +8,7 @@ from compartmentalABM import Grid, runABM
 from training import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
-    from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, phi0, advV0, tau
+    from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau
     # Initialize log-parameters so they remain positive.
     log_alpha = torch.tensor(math.log(alpha0), requires_grad=True, device=device)
     log_beta = torch.tensor(math.log(beta0), requires_grad=True, device=device)
@@ -16,13 +16,18 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
     log_gamma = torch.tensor(math.log(gamma0), requires_grad=True, device=device)
     phi = torch.tensor(phi0, requires_grad=True, device=device)
     log_advV = torch.tensor(math.log(advV0), requires_grad=True, device=device)
+    log_rho = torch.tensor(math.log(rho0), requires_grad=True, device=device)
+    log_l_rho = torch.tensor(math.log(l_rho0), requires_grad=True, device=device)
     # Precompute nearest neighbors once
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
 
     # Use Adam to optimize the log-parameters
-    optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, phi, log_advV], lr=lr)
+    optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, phi, log_advV, log_rho, log_l_rho], lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=50)
+
+    # load any environmental data
+    plant_map = load_infection_map('oak_density_map.pt', device=device)
     # Load the reference infection map once
     ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
     # Load the initial infection sites
@@ -36,11 +41,14 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
         sigma = torch.exp(log_sigma)
         gamma = torch.exp(log_gamma)
         advV = torch.exp(log_advV)
+        rho = torch.exp(log_rho)
+        l_rho = torch.exp(log_l_rho)
         loss = 0
         for _ in range(num_ensemble):
           # Initialize grid and simulate model
           grid = Grid(N, I_0, device)
-          grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, n_timesteps, nearest_ind, nearest_dist, tau)
+          grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps, nearest_ind, nearest_dist,
+                        plant_map, tau)
           loss += loss_function(grid, ref_infection_map, loss_type='lcosh_dice')
         # Compute loss (mean squared error between simulated and reference infection maps)
         loss = loss / num_ensemble
@@ -48,28 +56,35 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
         loss.backward()
         optimizer.step()
         scheduler.step(loss.item())
-        if epoch % 10 == 0:
-            print(f"Epoch {epoch}: Loss={loss.item()}, alpha={alpha.item()}, beta={beta.item()}, sigma={sigma.item()}, gamma={gamma.item()}, phi={phi.item()}, advV={advV.item()}, lr={scheduler.get_last_lr()[0]}")
+        if epoch % 1 == 0:
+            print(f"Epoch {epoch}: Loss={loss.item()}, alpha={alpha.item()}, beta={beta.item()}, sigma={sigma.item()}, gamma={gamma.item()}, phi={phi.item()}, advV={advV.item()}, rho={rho.item()}, l_rho={l_rho.item()}, lr={scheduler.get_last_lr()[0]}")
 
     # Return the optimized parameters (converted from log-space)
     return torch.exp(log_alpha).item(), torch.exp(log_beta).item(), torch.exp(log_sigma).item(), torch.exp(log_gamma).item(), phi.item()
 
 def run_single_shot():
-    from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, phi0, advV0, tau
+    from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau
     alpha = torch.tensor(alpha0, requires_grad=True, device=device)
     beta = torch.tensor(beta0, requires_grad=True, device=device)
     sigma = torch.tensor(sigma0, requires_grad=True, device=device)
     gamma = torch.tensor(gamma0, requires_grad=True, device=device)
     phi = torch.tensor(phi0, requires_grad=True, device=device)
     advV = torch.tensor(advV0, requires_grad=True, device=device)
+    rho = torch.tensor(rho0, requires_grad=True, device=device)
+    l_rho = torch.tensor(l_rho0, requires_grad=True, device=device)
     # Initialize grid
     #I_0 = get_I_0(N, device, center=(N//2, N//2), sigma=10, infection_rate=0.01)
     I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
     grid = Grid(N, I_0, device)
+
     # Precompute nearest neighbors and sparse weight matrix
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
+
+    # load any environmental data
+    plant_map = load_infection_map('oak_density_map.pt', device=device)
+
     # Simulate model
-    grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, n_timesteps, nearest_ind, nearest_dist, tau)
+    grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps, nearest_ind, nearest_dist, plant_map, tau)
 
     # Compute loss
     ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
@@ -85,6 +100,8 @@ def run_single_shot():
     print(f"Gradient wrt gamma: {gamma.grad}")
     print(f"Gradient wrt phi: {phi.grad}")
     print(f"Gradient wrt advV: {advV.grad}")
+    print(f"Gradient wrt rho: {rho.grad}")
+    print(f"Gradient wrt l_rho: {l_rho.grad}")
     save_infection_map(grid.I, 'infection_map.pt')
 
 def run_parameter_sweep():

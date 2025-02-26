@@ -132,6 +132,7 @@ def plot_grid(grid, title):
     plt.show()
 
 
-tree_grid = (1./(torch.sqrt(tree_grid)+1))
-tree_grid = gaussian_smooth(tree_grid, sigma=.5)
+#tree_grid = torch.exp(1-(torch.sqrt(tree_grid)))
+#tree_grid = gaussian_smooth(tree_grid, sigma=.5)
+tree_grid = 1.0/(1+torch.exp(-0.66*(tree_grid-0.015)))
 plot_grid(tree_grid,"Tree Grid")
