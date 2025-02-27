@@ -1,7 +1,7 @@
 import torch
 from torchmetrics.image import StructuralSimilarityIndexMeasure as SSIM
 import torchvision.transforms as T
-def smooth_binary_image(img, lblur=2.0):
+def smooth_for_ssm(img, lblur=2.0):
     # Convert to float and add batch/channel dimensions if necessary
     img = img.float().unsqueeze(0).unsqueeze(0)  # Add batch & channel dim
     # Determine kernel size based on lblur
@@ -59,8 +59,8 @@ def loss_function(grid, ref_infection_map, loss_type="dice"):
         return torch.log(torch.cosh(1 - dice_coeff))  # Log-cosh transformation
     elif loss_type == "ssim":
         ssim_fn = SSIM(data_range=1.0)  # SSIM expects values in [0, 1]
-        I_pred = smooth_binary_image(I_pred)
-        I_ref = smooth_binary_image(I_ref)
+        I_pred = smooth_for_ssm(I_pred,5.)
+        I_ref = smooth_for_ssm(I_ref,5.)
         I_pred = I_pred.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims
         I_ref = I_ref.unsqueeze(0).unsqueeze(0)
         ssim_score = ssim_fn(I_pred, I_ref)

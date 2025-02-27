@@ -92,7 +92,7 @@ def run_single_shot():
     loss.backward()
 
     #plot_grid(grid)
-   # plot_grid_and_ref(grid, I_0, ref_infection_map)
+    #plot_grid_and_ref(grid, I_0, ref_infection_map)
     plot_perimeters(ref_infection_map, grid.I)
 
     print(f"Loss: {loss.item()}")
