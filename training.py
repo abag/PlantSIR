@@ -58,7 +58,8 @@ def loss_function(grid, ref_infection_map, loss_type="dice"):
         dice_coeff = (2.0 * intersection + 1e-6) / (union + 1e-6)
         return torch.log(torch.cosh(1 - dice_coeff))  # Log-cosh transformation
     elif loss_type == "ssim":
-        ssim_fn = SSIM(data_range=1.0)  # SSIM expects values in [0, 1]
+        device = I_pred.device
+        ssim_fn = SSIM(data_range=1.0).to(device)  # Move SSIM to the same device as the input tensor
         I_pred = smooth_for_ssm(I_pred,5.)
         I_ref = smooth_for_ssm(I_ref,5.)
         I_pred = I_pred.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims
