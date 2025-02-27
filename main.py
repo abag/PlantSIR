@@ -49,7 +49,7 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
           grid = Grid(N, I_0, device)
           grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps, nearest_ind, nearest_dist,
                         plant_map, tau)
-          loss += loss_function(grid, ref_infection_map, loss_type='lcosh_dice')
+          loss += loss_function(grid, ref_infection_map, loss_type='ssim')
         # Compute loss (mean squared error between simulated and reference infection maps)
         loss = loss / num_ensemble
         # Backpropagation and optimization step
@@ -88,11 +88,13 @@ def run_single_shot():
 
     # Compute loss
     ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
-    loss = loss_function(grid, ref_infection_map)
+    loss = loss_function(grid, ref_infection_map, loss_type='ssim')
     loss.backward()
 
     #plot_grid(grid)
-    plot_grid_and_ref(grid, I_0, ref_infection_map)
+   # plot_grid_and_ref(grid, I_0, ref_infection_map)
+    plot_perimeters(ref_infection_map, grid.I)
+
     print(f"Loss: {loss.item()}")
     print(f"Gradient wrt alpha: {alpha.grad}")
     print(f"Gradient wrt beta: {beta.grad}")

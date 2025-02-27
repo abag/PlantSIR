@@ -1,6 +1,69 @@
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
+import torch.nn.functional as F
+import torchvision.transforms as T
+
+def smooth_binary_image(img, lblur=10.0):
+    kernel_size = int(6 * lblur) + 1  # Rule of thumb for Gaussian filter size
+    kernel_size = kernel_size if kernel_size % 2 == 1 else kernel_size + 1  # Ensure odd size for kernel
+    # Apply Gaussian Blur using torchvision.transforms
+    gaussian_blur = T.GaussianBlur(kernel_size=kernel_size, sigma=lblur)
+    img_blurred = gaussian_blur(img.unsqueeze(0).unsqueeze(0)).squeeze(0).squeeze(0)  # Add and remove batch/channel dim
+    return img_blurred
+
+def extract_perimeter(binary_img, threshold=0.125):
+    # Step 1: Threshold the smoothed image to binary if it's not already
+    binary_img = smooth_binary_image(binary_img)
+    thresholded = (binary_img > threshold).float()
+    # Step 2: Dilate the binary image (expand the shapes) to find the outer boundary
+    dilated = F.max_pool2d(thresholded.unsqueeze(0).unsqueeze(0), kernel_size=3, stride=1, padding=1).squeeze(
+        0).squeeze(0)
+    # Step 3: Subtract the original binary image from the dilated version to get the perimeter
+    perimeter = dilated - thresholded
+    return perimeter
+
+
+import matplotlib.pyplot as plt
+import torch
+import torch.nn.functional as F
+import torchvision.transforms as T
+
+
+def smooth_binary_image(img, lblur=10.0):
+    kernel_size = int(6 * lblur) + 1  # Rule of thumb for Gaussian filter size
+    kernel_size = kernel_size if kernel_size % 2 == 1 else kernel_size + 1  # Ensure odd size for kernel
+    # Apply Gaussian Blur using torchvision.transforms
+    gaussian_blur = T.GaussianBlur(kernel_size=kernel_size, sigma=lblur)
+    img_blurred = gaussian_blur(img.unsqueeze(0).unsqueeze(0)).squeeze(0).squeeze(0)  # Add and remove batch/channel dim
+    return img_blurred
+
+
+def extract_perimeter(binary_img, threshold=0.125):
+    # Step 1: Threshold the smoothed image to binary if it's not already
+    binary_img = smooth_binary_image(binary_img)
+    thresholded = (binary_img > threshold).float()
+    # Step 2: Dilate the binary image (expand the shapes) to find the outer boundary
+    dilated = F.max_pool2d(thresholded.unsqueeze(0).unsqueeze(0), kernel_size=3, stride=1, padding=1).squeeze(
+        0).squeeze(0)
+    # Step 3: Subtract the original binary image from the dilated version to get the perimeter
+    perimeter = dilated - thresholded
+    return perimeter
+
+
+def plot_perimeters(ref_infection_map, grid_S, title_suffix=""):
+    # Compute perimeters
+    p_ref = extract_perimeter(ref_infection_map)
+    p_s = extract_perimeter(grid_S)
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.imshow(p_ref.cpu().detach().numpy(), cmap='Blues', alpha=0.7, label="Reference Infection Perimeter")
+    ax.imshow(p_s.cpu().detach().numpy(), cmap='Reds', alpha=0.7, label="Susceptible Perimeter")
+    ax.set_title(f"Perimeters of Reference Infection and Susceptible {title_suffix}")
+    ax.set_aspect('equal')
+    plt.tight_layout()
+    plt.show()
+
 def plot_grid_and_ref(grid, initial_infection, ref_infection_map, title_suffix=""):
     fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 
@@ -9,9 +72,9 @@ def plot_grid_and_ref(grid, initial_infection, ref_infection_map, title_suffix="
     axes[0, 0].set_title(f"Initial Infection (I) {title_suffix}")
     plt.colorbar(im0, ax=axes[0, 0])
     axes[0, 0].set_aspect('equal')
-
     # Plot Reference Infection Map
-    im1 = axes[0, 1].imshow(ref_infection_map.cpu().detach().numpy(), cmap='plasma')
+    p_ref = extract_perimeter(ref_infection_map)
+    im1 = axes[0, 1].imshow(p_ref.cpu().detach().numpy(), cmap='plasma')
     axes[0, 1].set_title(f"Reference Infection Map {title_suffix}")
     plt.colorbar(im1, ax=axes[0, 1])
     axes[0, 1].set_aspect('equal')
