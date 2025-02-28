@@ -13,7 +13,7 @@ beta0 = 0.011
 sigma0 = 3.8306641578674316
 gamma0 = 1.9996953142253915e-06
 phi0 = 0.923
-advV0 = 0.328
+advV0 = 0.36
 rho0 = 0.016
 l_rho0 = 0.9585798978805542
 # Parameters for 'parameter_sweep' mode

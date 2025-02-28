@@ -60,8 +60,8 @@ def loss_function(grid, ref_infection_map, loss_type="dice"):
     elif loss_type == "ssim":
         device = I_pred.device
         ssim_fn = SSIM(data_range=1.0).to(device)  # Move SSIM to the same device as the input tensor
-        I_pred = smooth_for_ssm(I_pred,5.)
-        I_ref = smooth_for_ssm(I_ref,5.)
+        I_pred = smooth_for_ssm(I_pred,10.)
+        I_ref = smooth_for_ssm(I_ref,10.)
         I_pred = I_pred.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims
         I_ref = I_ref.unsqueeze(0).unsqueeze(0)
         ssim_score = ssim_fn(I_pred, I_ref)
