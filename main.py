@@ -14,7 +14,7 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
     log_beta = torch.tensor(math.log(beta0), requires_grad=True, device=device)
     log_sigma = torch.tensor(math.log(sigma0), requires_grad=True, device=device)
     log_gamma = torch.tensor(math.log(gamma0), requires_grad=True, device=device)
-    phi = torch.tensor(phi0, requires_grad=True, device=device)
+    log_phi = torch.tensor(math.log(phi0), requires_grad=True, device=device)
     log_advV = torch.tensor(math.log(advV0), requires_grad=True, device=device)
     log_rho = torch.tensor(math.log(rho0), requires_grad=True, device=device)
     log_l_rho = torch.tensor(math.log(l_rho0), requires_grad=True, device=device)
@@ -22,10 +22,9 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
 
     # Use Adam to optimize the log-parameters
-    optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, phi, log_advV, log_rho, log_l_rho], lr=lr)
+    optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, log_phi, log_advV, log_rho, log_l_rho], lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=50)
-
     # load any environmental data
     plant_map = load_infection_map('oak_density_map.pt', device=device)
     # Load the reference infection map once
@@ -40,6 +39,7 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
         beta = torch.exp(log_beta)
         sigma = torch.exp(log_sigma)
         gamma = torch.exp(log_gamma)
+        phi = torch.exp(log_phi)
         advV = torch.exp(log_advV)
         rho = torch.exp(log_rho)
         l_rho = torch.exp(log_l_rho)
@@ -49,7 +49,7 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
           grid = Grid(N, I_0, device)
           grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps, nearest_ind, nearest_dist,
                         plant_map, tau)
-          loss += loss_function(grid, ref_infection_map, loss_type='ssim')
+          loss += loss_function(grid, ref_infection_map, loss_type='lcosh_dice')
         # Compute loss (mean squared error between simulated and reference infection maps)
         loss = loss / num_ensemble
         # Backpropagation and optimization step
@@ -92,7 +92,8 @@ def run_single_shot():
     loss.backward()
 
     #plot_grid(grid)
-    #plot_grid_and_ref(grid, I_0, ref_infection_map)
+    plot_grid_and_ref(grid, I_0, ref_infection_map)
+    #plot_I_start_end(grid, I_0,hardcopy=True)
     plot_perimeters(ref_infection_map, grid.I)
 
     print(f"Loss: {loss.item()}")
@@ -105,6 +106,44 @@ def run_single_shot():
     print(f"Gradient wrt rho: {rho.grad}")
     print(f"Gradient wrt l_rho: {l_rho.grad}")
     save_infection_map(grid.I, 'infection_map.pt')
+
+def run_risk_map():
+    from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau, N_risk
+    # Initialize parameters (no gradients needed)
+    alpha = torch.tensor(alpha0, device=device)
+    beta = torch.tensor(beta0, device=device)
+    sigma = torch.tensor(sigma0, device=device)
+    gamma = torch.tensor(gamma0, device=device)
+    phi = torch.tensor(phi0, device=device)
+    advV = torch.tensor(advV0, device=device)
+    rho = torch.tensor(rho0, device=device)
+    l_rho = torch.tensor(l_rho0, device=device)
+
+    # Load environmental data
+    plant_map = load_infection_map('oak_density_map.pt', device=device)
+
+    # Precompute nearest neighbors and sparse weight matrix
+    nearest_ind, nearest_dist = compute_NN(N, M, device=device)
+
+    # Initialize risk map (counts how often each cell is infected)
+    risk_map = torch.zeros((N, N), device=device)
+
+    for _ in range(N_risk):
+        # Load initial infection map for each simulation
+        I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
+        grid = Grid(N, I_0, device)
+
+        # Run the simulation
+        grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps, nearest_ind, nearest_dist, plant_map, tau)
+
+        # Update risk map (increment cells that are infected at the final time step)
+        risk_map += (grid.I > 0).float()
+
+    # Normalize risk map (percentage of times each cell was infected)
+    risk_map /= N_risk
+
+    # Plot and save the risk map
+    plot_risk_map(risk_map, hardcopy=True)
 
 def run_parameter_sweep():
     from params import N, M, n_timesteps, tau
@@ -226,7 +265,9 @@ print(f"Running mode: {run_mode}")
 if run_mode == 'single_shot':
     run_single_shot()
 if run_mode == 'optimize':
-        run_optimize()
+    run_optimize()
+if run_mode == 'risk_map':
+    run_risk_map()
 elif run_mode == 'parameter_sweep':
     run_parameter_sweep()
 elif run_mode == 'beta_sweep':

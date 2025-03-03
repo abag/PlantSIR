@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as T
@@ -32,21 +33,22 @@ def plot_perimeters(ref_infection_map, grid_I, title_suffix=""):
     p_I = extract_perimeter(grid_I)
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
     im0 = axes[0].imshow(smoothed_ref.cpu().detach().numpy(), cmap='Blues')
     axes[0].set_title(f"Smoothed Reference Infection {title_suffix}")
     plt.colorbar(im0, ax=axes[0])
     axes[0].set_aspect('equal')
-
+    axes[0].invert_yaxis()
     im1 = axes[1].imshow(smoothed_I.cpu().detach().numpy(), cmap='Reds')
     axes[1].set_title(f"Infected Map (S) {title_suffix}")
     plt.colorbar(im1, ax=axes[1])
     axes[1].set_aspect('equal')
-
+    axes[1].invert_yaxis()
     axes[2].imshow(p_ref.cpu().detach().numpy(), cmap='Blues', alpha=0.7, label="Reference Infection Perimeter")
     axes[2].imshow(p_I.cpu().detach().numpy(), cmap='Reds', alpha=0.7, label="Susceptible Perimeter")
     axes[2].set_title(f"Perimeters of Reference Infection and Simulation {title_suffix}")
     axes[2].set_aspect('equal')
-
+    axes[2].invert_yaxis()
     plt.tight_layout()
     plt.show()
 
@@ -58,38 +60,75 @@ def plot_grid_and_ref(grid, initial_infection, ref_infection_map, title_suffix="
     axes[0, 0].set_title(f"Initial Infection (I) {title_suffix}")
     plt.colorbar(im0, ax=axes[0, 0])
     axes[0, 0].set_aspect('equal')
+    axes[0, 0].invert_yaxis()
+
     # Plot Reference Infection Map
-    p_ref = extract_perimeter(ref_infection_map)
-    im1 = axes[0, 1].imshow(p_ref.cpu().detach().numpy(), cmap='plasma')
+    im1 = axes[0, 1].imshow(ref_infection_map.cpu().detach().numpy(), cmap='plasma')
     axes[0, 1].set_title(f"Reference Infection Map {title_suffix}")
     plt.colorbar(im1, ax=axes[0, 1])
     axes[0, 1].set_aspect('equal')
+    axes[0, 1].invert_yaxis()
+
     # Plot Final Infected (I)
     im2 = axes[0, 2].imshow(grid.I.cpu().detach().numpy(), cmap='plasma')
     axes[0, 2].set_title(f"Final Infected (I) {title_suffix}")
     plt.colorbar(im2, ax=axes[0, 2])
     axes[0, 2].set_aspect('equal')
-    #edges = cv2.Canny(grid.I.cpu().detach().numpy().astype(np.uint8) * 255, 100, 200)
-    #axes[0, 2].imshow(edges, cmap='gray',alpha=0.7)  # Adjust alpha for better visibility
+    axes[0, 2].invert_yaxis()
 
     # Plot Susceptible (S)
     im3 = axes[1, 0].imshow(grid.S.cpu().detach().numpy(), cmap='viridis')
     axes[1, 0].set_title(f"Susceptible (S) {title_suffix}")
     plt.colorbar(im3, ax=axes[1, 0])
+    axes[1, 0].invert_yaxis()
+
     # Plot Recovered (R)
     im4 = axes[1, 1].imshow(grid.R.cpu().detach().numpy(), cmap='cividis')
     axes[1, 1].set_title(f"Recovered (R) {title_suffix}")
     plt.colorbar(im4, ax=axes[1, 1])
+    axes[1, 1].invert_yaxis()
 
     # Plot Total Population (N = S + I + R)
     N_grid = grid.S + grid.I + grid.R
     im5 = axes[1, 2].imshow(N_grid.cpu().detach().numpy(), cmap='magma')
     axes[1, 2].set_title(f"Total Population (N = S + I + R) {title_suffix}")
     plt.colorbar(im5, ax=axes[1, 2])
+    axes[1, 2].invert_yaxis()
 
     # Adjust layout
     plt.tight_layout()
     plt.show()
+
+
+import matplotlib.pyplot as plt
+
+def plot_I_start_end(grid, initial_infection,hardcopy=False):
+    plt.rcParams['text.usetex'] = True  # Enable LaTeX rendering
+    fig, axes = plt.subplots(1, 2, figsize=(18, 12))
+
+    # Plot Initial Infection Map
+    im0 = axes[0].imshow(initial_infection.cpu().detach().numpy(), cmap='gray_r')
+    axes[0].set_title(r"$I(t=0)$", fontsize=36)
+    axes[0].set_aspect('equal')
+    axes[0].set_xlabel(r'$x$', fontsize=30)
+    axes[0].set_ylabel(r'$y$', fontsize=30)
+    axes[0].tick_params(axis='both', labelsize=24)
+    axes[0].invert_yaxis()
+    # Plot Final Infected (I)
+    im1 = axes[1].imshow(grid.I.cpu().detach().numpy(), cmap='gray_r')
+    axes[1].set_title(r"$I(t=t_n)$", fontsize=36)
+    axes[1].set_aspect('equal')
+    axes[1].set_xlabel(r'$x$', fontsize=30)
+    axes[1].set_ylabel(r'$y$', fontsize=30)
+    axes[1].tick_params(axis='both', labelsize=24)
+    axes[1].invert_yaxis()
+    plt.tight_layout()
+    if hardcopy:
+        plt.savefig("out.png", dpi=300, bbox_inches='tight')  # Save with high resolution
+        print(f"Plot saved to file out.png")
+        plt.show()
+    else:
+        plt.show()  # Display the plot
 
 def plot_grid(grid, title_suffix=""):
     fig, axes = plt.subplots(2, 2, figsize=(12, 12))
@@ -113,6 +152,22 @@ def plot_grid(grid, title_suffix=""):
     # Adjust layout
     plt.tight_layout()
     plt.show()
+
+def plot_risk_map(risk_map, hardcopy=False):
+    plt.rcParams['text.usetex'] = True  # Enable LaTeX rendering
+    plt.figure(figsize=(10, 8))
+    plt.imshow(risk_map.cpu().numpy(), cmap='inferno', vmin=0, vmax=1)
+    plt.colorbar(label="Infection Probability")
+    plt.xlabel(r'$x$', fontsize=32)
+    plt.ylabel(r'$y$', fontsize=32)
+    plt.title("Risk Map: Infection Probability Over Simulations", fontsize=18)
+    plt.gca().invert_yaxis()  # Ensure y-axis increases upwards
+
+    if hardcopy:
+        plt.savefig("risk_map.png", dpi=300, bbox_inches='tight')
+        print(f"Risk map saved to risk_map.png")
+    else:
+        plt.show()
 
 def plot_parameter_sweep(sweep_values, losses, gradients, param_name, save_path="parameter_sweep.png"):
     """

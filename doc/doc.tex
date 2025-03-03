@@ -140,6 +140,16 @@ These terms are used in the continuous update equations:
 
 This formulation ensures differentiability, enabling back-propagation and optimisation via gradient descent.
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.65\textwidth]{a2_b0p01_s4.png}\\
+     \includegraphics[width=0.65\textwidth]{a2_b0p002s8.png} \\
+      \includegraphics[width=0.65\textwidth]{a1_b0p0015s8.png}\\
+       \includegraphics[width=0.65\textwidth]{a2_b0p01_s2_V_2.png}
+    \caption{Snapshots of the spread at the end of a simulation ($t=t_n$) showing the role of varying input parameters. All start with the same `seed' infection shown in the left panel (black cells $=I$, white $=S$. In the top panel $\alpha=2$, $\beta=0.01$, $\sigma=4$; second $\alpha=2$, $\beta=0.002$, $\sigma=8$; third $\alpha=1$, $\beta=0.0015$, $\sigma=8$. All of these have isotropic spread $V=0$, the final panel is from a simulation with  $\alpha=2$, $\beta=0.01$, $\sigma=2$, $V=2$. )
+    \label{fig:snapshots}}
+\end{figure}
+
 \subsection{Optimisation Process}
 The optimisation process aims to find the best parameters that minimise the discrepancy between the simulated infection map and a reference infection map. The parameters include the parameters in the spatial transmission  kernel ($\alpha$, $\beta$, $\sigma$), recovery rate ($\gamma$), and advective `velocity' ($V$) and direction $\phi$. The optimisation is performed using the Adam optimiser and a loss function, which can be chosen from various options in the code. For example we can compare the fit between a simulated and reference infection map through the structural similarity index measure (SSIM),  a simple mean squared error (MSE).
 
@@ -162,8 +172,33 @@ v_t &= \beta_2 v_{t-1} + (1 - \beta_2) (\nabla_\Theta \mathcal{L})^2 \\
 \hat{m}_t &= \frac{m_t}{1 - \beta_1^t}, \quad \hat{v}t = \frac{v_t}{1 - \beta_2^t} \\
 \Theta_t &= \Theta_{t-1} - \frac{\eta}{\sqrt{\hat{v}_t} + \epsilon} \hat{m}_t
 \end{align*}
-where $m_t$ and $v_t$ are biased first and second moment estimates, $\eta$ is the learning rate, and $\epsilon$ is a small constant for numerical stability.
+where $m_t$ and $v_t$ are biased first and second moment estimates, $\eta$ is the learning rate, and $\epsilon$ is a small constant for numerical stability. Free parameters in the model that can be optimised are tabulated below:
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|l|}
+\hline
+\textbf{Parameter} & \textbf{Description} \\ \hline
+$\alpha$ & Power law exponent in the interaction kernel \\ \hline
+$\beta$ & Controls the magnitude of the infection force from $I$ to $S$ \\ \hline
+$\sigma$ & Characteristic lengthscale of the spread \\ \hline
+$\gamma$ & The recovery rate parameter, controlling rate of movement from $I$ to $R$. \\ \hline
+$\phi$ & The direction of advection, bias of infection spread in a particular direction. \\ \hline
+$V$ & The  strength of the directional bias in the infection spread. \\ \hline
+$\rho$ & The baseline value for how environmental factors affect the $S$ to $I$ rate. \\ \hline
+$l_{\rho}$ & Modulates how the environmental factor influences $S$ to $I$. \\ \hline
+\end{tabular}
+\end{table}
+
 \subsection{Numerical Simulations and Results}
-The model is run for a set number of timesteps $n_{\text{timesteps}}$. For each timestep, the force of infection and the transition probabilities are updated, and the grid is evolved according to the infection and recovery dynamics. The model is then evaluated against the reference infection map using the loss function.
+The model is run for a set number of timesteps $n_{\text{timesteps}}$. For each timestep, the force of infection and the transition probabilities are updated, and the grid is evolved according to the infection and recovery dynamics. The model is then evaluated against the reference infection map using the loss function. Figure \ref{fig:snapshots} shows the typical output of a single simulation for varying input parameters. We can also run ensembles of simulations and get risk maps for the spread due to the inherent stochasticity of our ABM approach see Fig.~\ref{fig:risk_map} for an example for a model trained on real data.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.65\textwidth]{risk_map.png}
+    \caption{A risk map produced from 50 ensemble simulations of the ABM model at the same input parameter values (optimised to fit the spread of OPM in central London), the colour scale goes from 0 to 1 (which can be interpreted by multiplying by 100\%).
+    \label{fig:risk_map}}
+\end{figure}
+
 
 \end{document}

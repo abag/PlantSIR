@@ -90,8 +90,15 @@ def compute_sparse_weight_matrix(nearest_distances, nearest_indices, alpha, beta
     cos_theta = dot_product / (norms * torch.norm(phi_vector))  # Cosine of angle between vectors
 
     # Apply anisotropic scaling: increase or decrease distance based on alignment with phi
-    anisotropic_factor = 1 + advV*abs(cos_theta)  # You can modify this scaling function as needed
-    adjusted_distances = nearest_distances/anisotropic_factor
+    #OLD CODE BLOCK ----DIDN'T WORK AS HOPED-----
+    #anisotropic_factor = 1 + advV*abs(cos_theta)  # You can modify this scaling function as needed
+
+    # NEW CODE BLOCK ----SEEMS AN IMPROVEMENT-----
+    # Compute cross product  for sin(theta) in 2D
+    sin_theta = (distance_vectors[..., 0] * phi_vector[1] - distance_vectors[..., 1] * phi_vector[0]) / (norms * torch.norm(phi_vector))
+    # Compute anisotropic factor
+    anisotropic_factor = (1.0 + advV) / torch.sqrt(cos_theta ** 2 + ((1.0 + advV) ** 2) * sin_theta ** 2)
+    adjusted_distances = nearest_distances / anisotropic_factor
 
     # Now compute the weight matrix using the adjusted distances
     return beta * torch.exp(-(adjusted_distances / sigma) ** alpha)
