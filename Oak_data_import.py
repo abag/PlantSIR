@@ -28,24 +28,6 @@ def gaussian_smooth(grid, sigma=1.5):
     smoothed_grid = F.conv2d(grid, gaussian_2d, padding=kernel_size // 2)
     return smoothed_grid.squeeze()  # Remove batch & channel dimensions
 
-# Get the bounding box (min/max Easting & Northing)
-from params import min_east, max_east, min_north, max_north
-from params import N
-df_trees = pd.read_csv('./data_sets/Oak_CC_SWF_KRIGE_17_3_21_forStephen.csv')
-
-df_trees_ldn = df_trees.copy()
-df_trees_ldn = df_trees_ldn[df_trees_ldn['X'] > min_east]
-df_trees_ldn = df_trees_ldn[df_trees_ldn['X'] < max_east]
-df_trees_ldn = df_trees_ldn[df_trees_ldn['Y'] > min_north]
-df_trees_ldn = df_trees_ldn[df_trees_ldn['Y'] < max_north]
-
-X = df_trees_ldn['X']
-Y = df_trees_ldn['Y']
-values = df_trees_ldn['EstimateOak_ha']
-
-# Create a grid based on X and Y coordinates
-heatmap_data = df_trees_ldn.pivot_table(index='Y', columns='X', values='EstimateOak_ha', aggfunc='mean')
-
 def get_value_for_coordinate(heatmap_data, X, Y):
     # Check if the exact coordinates are available in the heatmap grid
     if Y in heatmap_data.index and X in heatmap_data.columns:
@@ -57,14 +39,6 @@ def get_value_for_coordinate(heatmap_data, X, Y):
 
     # Return the value for the closest grid cell
     return heatmap_data.loc[closest_Y, closest_X]
-
-
-# Calculate the spatial extent (size of the bounding box)
-width = max_east - min_east
-height = max_north - min_north
-
-# Initialize an empty N x N grid with zeros
-tree_grid = torch.zeros((N, N), dtype=torch.float32)
 
 def find_centers(min_x, max_x, min_y, max_y, N):
     # Calculate side length of each square
@@ -83,11 +57,9 @@ def find_centers(min_x, max_x, min_y, max_y, N):
 
     return centers
 
-centers = find_centers(min_east, max_east,min_north, max_north,N)
-
 def find_grid_index(centers, min_x, max_x,min_y,max_y, N):
-    center_x = centers[0] 
-    center_y = centers[1] 
+    center_x = centers[0]
+    center_y = centers[1]
     side_length_x = (max_x - min_x) / N
     side_length_y = (max_y - min_y) / N
 
@@ -101,14 +73,6 @@ def find_grid_index(centers, min_x, max_x,min_y,max_y, N):
 
     return i, j
 
-for k in range(len(centers)):
-    i,j = find_grid_index(centers[k], min_east, max_east, min_north, max_north, N)
-    value = get_value_for_coordinate(heatmap_data, centers[k][0], centers[k][1])
-    tree_grid[i,j] = value
-
-torch.save(tree_grid, "oak_density_map.pt")
-print(f"Grid saved as 'oak_density_map.pt' with {N} x {N} cells")
-
 def plot_grid(grid, title):
     plt.figure(figsize=(6, 6))
     plt.imshow(grid, cmap="viridis", origin="lower")
@@ -117,7 +81,45 @@ def plot_grid(grid, title):
     plt.xlabel("Easting (scaled)")
     plt.ylabel("Northing (scaled)")
     plt.show()
-if __name__ == "__main__":
+
+def read_save_tree_grid():
+  # Get the bounding box (min/max Easting & Northing)
+  from params import min_east, max_east, min_north, max_north
+  from params import N
+  df_trees = pd.read_csv('./data_sets/Oak_CC_SWF_KRIGE_17_3_21_forStephen.csv')
+  df_trees_ldn = df_trees.copy()
+  df_trees_ldn = df_trees_ldn[df_trees_ldn['X'] > min_east]
+  df_trees_ldn = df_trees_ldn[df_trees_ldn['X'] < max_east]
+  df_trees_ldn = df_trees_ldn[df_trees_ldn['Y'] > min_north]
+  df_trees_ldn = df_trees_ldn[df_trees_ldn['Y'] < max_north]
+
+  X = df_trees_ldn['X']
+  Y = df_trees_ldn['Y']
+  values = df_trees_ldn['EstimateOak_ha']
+
+  # Create a grid based on X and Y coordinates
+  heatmap_data = df_trees_ldn.pivot_table(index='Y', columns='X', values='EstimateOak_ha', aggfunc='mean')
+
+  # Calculate the spatial extent (size of the bounding box)
+  width = max_east - min_east
+  height = max_north - min_north
+
+  # Initialize an empty N x N grid with zeros
+  tree_grid = torch.zeros((N, N), dtype=torch.float32)
+
+  centers = find_centers(min_east, max_east,min_north, max_north,N)
+
+  for k in range(len(centers)):
+    i,j = find_grid_index(centers[k], min_east, max_east, min_north, max_north, N)
+    value = get_value_for_coordinate(heatmap_data, centers[k][0], centers[k][1])
+    tree_grid[i,j] = value
+
+  torch.save(tree_grid, "oak_density_map.pt")
+  print(f"Grid saved as 'oak_density_map.pt' with {N} x {N} cells")
+
   tree_grid = gaussian_smooth(tree_grid, sigma=1.0)
   tree_grid = 1.0/(1+torch.exp(-0.66*(tree_grid-.5)))
   plot_grid(tree_grid,"Tree Grid")
+
+if __name__ == "__main__":
+  read_save_tree_grid()
