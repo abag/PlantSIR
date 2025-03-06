@@ -1,6 +1,6 @@
 # Set the run mode
 run_mode = 'optimize'
-#run_mode = 'single_shot'
+run_mode = 'single_shot'
 
 # Parameters for all modes
 N = 128
@@ -23,6 +23,10 @@ l_rho0 = 1.6
 
 # Parameters for risk map
 N_risk=5
+
+# Bounding box data for loading in external data and map plotting
+min_east, max_east = 470000, 570000
+min_north, max_north = 130000, 230000
 
 # Parameters for 'parameter_sweep' mode
 sweep_num = 50

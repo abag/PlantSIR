@@ -95,10 +95,10 @@ def run_single_shot():
     loss.backward()
 
     #plot_grid(grid)
-    plot_grid_and_ref(grid, I_0, ref_infection_map)
+    #plot_grid_and_ref(grid, I_0, ref_infection_map)
     #plot_I_start_end(grid, I_0,hardcopy=True)
-    plot_perimeters(ref_infection_map, grid.I)
-
+    #plot_perimeters(ref_infection_map, grid.I)
+    plot_grid_on_map(grid)
     print(f"Loss: {loss.item()}")
     print(f"Gradient wrt alpha: {alpha.grad}")
     print(f"Gradient wrt beta: {beta.grad}")

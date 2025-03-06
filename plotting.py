@@ -4,6 +4,10 @@ import matplotlib as mpl
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as T
+import pandas as pd
+from shapely.geometry import Point
+import geopandas as gpd
+import contextily as cx
 
 def smooth_binary_image(img, lblur=10.0):
     kernel_size = int(6 * lblur) + 1  # Rule of thumb for Gaussian filter size
@@ -50,6 +54,27 @@ def plot_perimeters(ref_infection_map, grid_I, title_suffix=""):
     axes[2].set_aspect('equal')
     axes[2].invert_yaxis()
     plt.tight_layout()
+    plt.show()
+
+def plot_grid_on_map(grid, title_suffix=""):
+    from params import min_east, max_east, min_north, max_north
+    from Oak_data_import import find_centers, find_grid_index
+    N = grid.N
+    centers = find_centers(min_east, max_east, min_north, max_north, N)
+    temp_df = pd.DataFrame(columns=['Easting', 'Northing'])
+    for k in range(len(centers)):
+        i, j = find_grid_index(centers[k], min_east, max_east, min_north, max_north, N)
+        i = (N - 1) - i
+        if grid.I[i, j] == 1:
+            temp_df.loc[len(temp_df)] = centers[k]
+    temp_df['geometry'] = [Point(x, y) for x, y in zip(temp_df['Easting'], temp_df['Northing'])]
+    gdf = gpd.GeoDataFrame(temp_df, geometry='geometry', crs='EPSG:27700')  # British National Grid
+    ax = gdf.plot(figsize=(10, 10), alpha=0.5, edgecolor='k')
+    ax.set_xlim(min_east, max_east)
+    ax.set_ylim(min_north, max_north)
+    ax.set_title(title_suffix)
+    # Add OpenStreetMap background
+    cx.add_basemap(ax, crs=gdf.crs.to_string(), source=cx.providers.OpenStreetMap.Mapnik)
     plt.show()
 
 def plot_grid_and_ref(grid, initial_infection, ref_infection_map, title_suffix=""):

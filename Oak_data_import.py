@@ -6,10 +6,8 @@ Created on Mon Feb 17 15:40:42 2025
 @author: kaitlynries
 """
 
-#oak data set import 
-
+#oak data set import
 import pandas as pd 
-import seaborn as sns
 import matplotlib.pyplot as plt
 import torch 
 import numpy as np
@@ -30,17 +28,16 @@ def gaussian_smooth(grid, sigma=1.5):
     smoothed_grid = F.conv2d(grid, gaussian_2d, padding=kernel_size // 2)
     return smoothed_grid.squeeze()  # Remove batch & channel dimensions
 
+# Get the bounding box (min/max Easting & Northing)
+from params import min_east, max_east, min_north, max_north
+from params import N
 df_trees = pd.read_csv('./data_sets/Oak_CC_SWF_KRIGE_17_3_21_forStephen.csv')
 
 df_trees_ldn = df_trees.copy()
-df_trees_ldn = df_trees_ldn[df_trees_ldn['X']>470000]
-df_trees_ldn = df_trees_ldn[df_trees_ldn['X']<570000]
-df_trees_ldn = df_trees_ldn[df_trees_ldn['Y']>130000]
-df_trees_ldn = df_trees_ldn[df_trees_ldn['Y']<230000]
-
-# Get the bounding box (min/max Easting & Northing)
-min_east, max_east = 470000, 570000
-min_north, max_north = 130000, 230000
+df_trees_ldn = df_trees_ldn[df_trees_ldn['X'] > min_east]
+df_trees_ldn = df_trees_ldn[df_trees_ldn['X'] < max_east]
+df_trees_ldn = df_trees_ldn[df_trees_ldn['Y'] > min_north]
+df_trees_ldn = df_trees_ldn[df_trees_ldn['Y'] < max_north]
 
 X = df_trees_ldn['X']
 Y = df_trees_ldn['Y']
@@ -49,21 +46,15 @@ values = df_trees_ldn['EstimateOak_ha']
 # Create a grid based on X and Y coordinates
 heatmap_data = df_trees_ldn.pivot_table(index='Y', columns='X', values='EstimateOak_ha', aggfunc='mean')
 
-# Plotting the heatmap
-#plt.figure(figsize=(10, 8))
-#sns.heatmap(heatmap_data, cmap='viridis', cbar_kws={'label': 'Estimate Oak (ha)'})
-#plt.title('Heatmap of Estimate Oak (ha)')
-#plt.show()
-
 def get_value_for_coordinate(heatmap_data, X, Y):
     # Check if the exact coordinates are available in the heatmap grid
     if Y in heatmap_data.index and X in heatmap_data.columns:
         return heatmap_data.loc[Y, X]
-    
+
     # If the exact coordinates are not available, find the closest match
     closest_X = min(heatmap_data.columns, key=lambda x: abs(x - X))
     closest_Y = min(heatmap_data.index, key=lambda y: abs(y - Y))
-    
+
     # Return the value for the closest grid cell
     return heatmap_data.loc[closest_Y, closest_X]
 
@@ -72,12 +63,8 @@ def get_value_for_coordinate(heatmap_data, X, Y):
 width = max_east - min_east
 height = max_north - min_north
 
-# Determine the side length of the grid (square)
-#N = int(np.ceil(max(width, height)))  # Ensures square grid
-N = 128
 # Initialize an empty N x N grid with zeros
 tree_grid = torch.zeros((N, N), dtype=torch.float32)
-
 
 def find_centers(min_x, max_x, min_y, max_y, N):
     # Calculate side length of each square
@@ -130,9 +117,7 @@ def plot_grid(grid, title):
     plt.xlabel("Easting (scaled)")
     plt.ylabel("Northing (scaled)")
     plt.show()
-
-
-#tree_grid = torch.exp(1-(torch.sqrt(tree_grid)))
-tree_grid = gaussian_smooth(tree_grid, sigma=5.0)
-tree_grid = 1.0/(1+torch.exp(-0.66*(tree_grid-2.0)))
-plot_grid(tree_grid,"Tree Grid")
+if __name__ == "__main__":
+  tree_grid = gaussian_smooth(tree_grid, sigma=1.0)
+  tree_grid = 1.0/(1+torch.exp(-0.66*(tree_grid-.5)))
+  plot_grid(tree_grid,"Tree Grid")
