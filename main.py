@@ -7,8 +7,9 @@ from plotting import *
 from compartmentalABM import Grid, runABM
 from training import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
-    from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau
+print("device: ", device)
+def run_optimize(num_epoch=1000, num_ensemble= 2, lr=0.01):
+    from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau
     # Initialize log-parameters so they remain positive.
     log_alpha = torch.tensor(math.log(alpha0), requires_grad=True, device=device)
     log_beta = torch.tensor(math.log(beta0), requires_grad=True, device=device)
@@ -22,7 +23,9 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
 
     # Use Adam to optimize the log-parameters
-    optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, log_phi, log_advV, log_rho, log_l_rho], lr=lr)
+    #optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, log_phi, log_advV, log_rho, log_l_rho], lr=lr)
+    optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, log_advV, log_rho, log_l_rho], lr=lr)
+
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=50)
     # load any environmental data
@@ -49,7 +52,7 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
           grid = Grid(N, I_0, device)
           grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps, nearest_ind, nearest_dist,
                         plant_map, tau)
-          loss += loss_function(grid, ref_infection_map, loss_type='lcosh_dice')
+          loss += loss_function(grid, ref_infection_map, loss_type=loss_fn)
         # Compute loss (mean squared error between simulated and reference infection maps)
         loss = loss / num_ensemble
         # Backpropagation and optimization step
@@ -63,7 +66,7 @@ def run_optimize(num_epoch=1000, num_ensemble= 1, lr=0.01):
     return torch.exp(log_alpha).item(), torch.exp(log_beta).item(), torch.exp(log_sigma).item(), torch.exp(log_gamma).item(), phi.item()
 
 def run_single_shot():
-    from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau
+    from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau
     alpha = torch.tensor(alpha0, requires_grad=True, device=device)
     beta = torch.tensor(beta0, requires_grad=True, device=device)
     sigma = torch.tensor(sigma0, requires_grad=True, device=device)
@@ -88,7 +91,7 @@ def run_single_shot():
 
     # Compute loss
     ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
-    loss = loss_function(grid, ref_infection_map, loss_type='ssim')
+    loss = loss_function(grid, ref_infection_map, loss_type=loss_fn)
     loss.backward()
 
     #plot_grid(grid)
