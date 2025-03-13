@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import h5py
 import math
+import time
 from neighbours import compute_NN
 from plotting import *
 from compartmentalABM import Grid, runABM
@@ -85,9 +86,11 @@ def run_single_shot():
 
     # load any environmental data
     plant_map = load_infection_map('oak_density_map.pt', device=device)
-
+    start_time = time.time()
     # Simulate model
     grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps, nearest_ind, nearest_dist, plant_map, tau)
+    end_time = time.time()
+    run_time = end_time - start_time
 
     # Compute loss
     ref_infection_map = load_infection_map('final_reference_ldn_map.pt', device=device)
@@ -109,6 +112,14 @@ def run_single_shot():
     print(f"Gradient wrt rho: {rho.grad}")
     print(f"Gradient wrt l_rho: {l_rho.grad}")
     save_infection_map(grid.I, 'infection_map.pt')
+
+    if torch.cuda.is_available():
+        memory_used = torch.cuda.max_memory_allocated(device) / (1024**3)  # GB
+    else:
+        import psutil
+        memory_used = psutil.Process().memory_info().rss / (1024**3)  # GB
+    print(f"Total execution time: {run_time:.2f} seconds")
+    print(f"Memory usage: {memory_used:.2f} GB")
 
 def run_risk_map():
     from params import N, M, n_timesteps, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau, N_risk
