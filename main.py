@@ -160,49 +160,59 @@ def run_risk_map():
     plot_risk_map(risk_map, hardcopy=True)
 
 def run_parameter_sweep():
-    from params import N, M, n_timesteps, tau
-    from params import sweep_num, beta0_min_max, sigma0_min_max, gamma0_min_max
+    from params import N, M, n_timesteps, loss_fn, alpha0, phi0, advV0, rho0, l_rho0, tau
+    from params import sweep_num, beta0_min_max, sigma0_min_max, gamma0_min_max, sweep_ensemble
 
     # Generate parameter ranges
     beta_values = torch.linspace(beta0_min_max[0], beta0_min_max[1], sweep_num, device=device)
     sigma_values = torch.linspace(sigma0_min_max[0], sigma0_min_max[1], sweep_num, device=device)
     gamma_values = torch.linspace(gamma0_min_max[0], gamma0_min_max[1], sweep_num, device=device)
 
-    print(beta_values.cpu().numpy())
-    print(sigma_values.cpu().numpy())
-    print(gamma_values.cpu().numpy())
-    return
-    # Initialize loss array
-    losses = np.zeros((sweep_num, sweep_num, sweep_num))
+    # Other input parameters
+    alpha = torch.tensor(alpha0, device=device)
+    phi = torch.tensor(phi0, device=device)
+    advV = torch.tensor(advV0, device=device)
+    rho = torch.tensor(rho0, device=device)
+    l_rho = torch.tensor(l_rho0, device=device)
 
-    # Precompute nearest neighbors and sparse weight matrix
+    # Initialize loss array to store ensemble results
+    losses = np.zeros((sweep_num, sweep_num, sweep_num, sweep_ensemble))
+
+    # Precompute nearest neighbors
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
 
-    # Reference infection map
+    # Load environmental data
+    plant_map = load_infection_map('oak_density_map.pt', device=device)
+
+    # Load reference infection map
     ref_infection_map = load_infection_map('infection_map.pt', device=device)
 
     for i, beta in enumerate(beta_values):
-        print(i)
         for j, sigma in enumerate(sigma_values):
             for k, gamma in enumerate(gamma_values):
-                # Initialize grid
-                grid = Grid(N, initial_infection_rate=0.02, device=device)
-                # Simulate model
-                grid = runABM(grid, beta, sigma, gamma, n_timesteps, nearest_ind, nearest_dist, tau)
+                # Run multiple ensembles for each parameter set
+                for e in range(sweep_ensemble):
+                    # Initialize grid with new initial conditions for each ensemble run
+                    I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
+                    grid = Grid(N, I_0, device)
 
-                # Compute loss
-                loss = loss_function(grid, ref_infection_map)
-                losses[i, j, k] = loss.item()
+                    # Run the simulation
+                    grid = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps, nearest_ind,
+                                  nearest_dist, plant_map, tau)
 
-                print(f"beta: {beta:.4f}, sigma: {sigma:.4f}, gamma: {gamma:.4f}, loss: {loss.item()}")
+                    # Compute loss
+                    loss = loss_function(grid, ref_infection_map, loss_fn)  # Adjust loss_type if needed
+                    losses[i, j, k, e] = loss.item()
 
-    # Save losses
-    #np.save("parameter_sweep_losses.npy", losses)
-    #print("Parameter sweep completed. Losses saved to 'parameter_sweep_losses.npy'.")
+                print(f"beta: {beta:.4f}, sigma: {sigma:.4f}, gamma: {gamma:.4f}, "
+                      f"loss (mean over {sweep_ensemble} runs): {losses[i, j, k].mean()}")
+
     # Save losses in HDF5 format
     with h5py.File("parameter_sweep_losses.h5", "w") as hf:
         hf.create_dataset("losses", data=losses)
+
     print("Parameter sweep completed. Losses saved to 'parameter_sweep_losses.h5'.")
+
 
 def run_beta_sweep():
     from params import N, M, n_timesteps, tau, sweep_num

@@ -66,5 +66,7 @@ def loss_function(grid, ref_infection_map, loss_type="dice"):
         I_ref = I_ref.unsqueeze(0).unsqueeze(0)
         ssim_score = ssim_fn(I_pred, I_ref)
         return 1 - ssim_score  # SSIM is maximized at 1, so we use (1 - SSIM) as the loss
+    elif loss_type == "proportion_infected":
+        return torch.sum(I_pred) / I_pred.numel()
     else:
         raise ValueError(f"Invalid loss_type '{loss_type}'. Choose from 'sum_of_squares', 'dice', or 'jaccard'.")
