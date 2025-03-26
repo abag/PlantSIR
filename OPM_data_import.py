@@ -1,15 +1,14 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Feb 11 07:48:36 2025
-
-@author: kaitlynries
-"""
-# Trying to include OPM data first just london
 import matplotlib.pyplot as plt
-import pandas as pd 
-import torch 
+import pandas as pd
+import torch
 import numpy as np
+
+# Define the year of interest
+TARGET_YEAR = 2018  # Change this to your desired year
+YEAR_ZER0 = 2006
+# Import bounding box and grid size
+from params import min_east, max_east, min_north, max_north
+from params import N
 
 def plot_grid(grid, title):
     plt.figure(figsize=(6, 6))
@@ -20,70 +19,38 @@ def plot_grid(grid, title):
     plt.ylabel("Northing (scaled)")
     plt.show()
 
-# Get the bounding box (min/max Easting & Northing)
-from params import min_east, max_east, min_north, max_north
-from params import N
-
+# Load data
 df = pd.read_excel('./data_sets/OPM_SurveyData_2006_2023 copy.xlsx')
+df = df[df['Status'] == 'Infested']
 
-df = df[df['Status']=='Infested']
-df_ldn = df.copy()
-df_ldn = df_ldn[df_ldn['Easting']>min_east]
-df_ldn = df_ldn[df_ldn['Easting']<max_east]
-df_ldn = df_ldn[df_ldn['Northing']>min_north]
-df_ldn = df_ldn[df_ldn['Northing']<max_north]
-df_ldn_2006 = df_ldn[df_ldn['Year']==2006]
-df_ldn_2022 = df_ldn[df_ldn['Year']==2022]
+df = df[(df['Easting'] > min_east) & (df['Easting'] < max_east) &
+        (df['Northing'] > min_north) & (df['Northing'] < max_north)]
 
-# Calculate the spatial extent (size of the bounding box)
+df_cumulative = df[df['Year'] <= TARGET_YEAR]  # All infestations up to TARGET_YEAR
+df_single_year = df[df['Year'] == TARGET_YEAR]  # Only infestations in TARGET_YEAR
+
+# Compute grid scaling
 width = max_east - min_east
 height = max_north - min_north
 
-# Initialize an empty N x N grid with zeros
-grid = torch.zeros((N, N), dtype=torch.float32)
+def create_grid(df_subset):
+    grid = torch.zeros((N, N), dtype=torch.float32)
+    for _, row in df_subset.iterrows():
+        i = int((row["Northing"] - min_north) / height * (N - 1))
+        j = int((row["Easting"] - min_east) / width * (N - 1))
+        i, j = min(N - 1, max(0, i)), min(N - 1, max(0, j))
+        grid[i, j] = 1  # Mark as infested
+    return grid
 
-# Scale the Easting/Northing values to fit into the N x N grid
-# Normalize the Easting and Northing values to [0, N-1]
-for _, row in df_ldn_2006.iterrows():
-    easting, northing = row["Easting"], row["Northing"]
+# Create the two grids
+grid_cumulative = create_grid(df_cumulative)
+grid_single_year = create_grid(df_single_year)
 
-    # Scale coordinates to fit into the grid (from [min, max] to [0, N-1])
-    i = int((northing - min_north) / height * (N - 1))  # Row index
-    j = int((easting - min_east) / width * (N - 1))    # Column index
+# Save grids
+torch.save(grid_cumulative, f"cumulative_infestation_{TARGET_YEAR-YEAR_ZER0}.pt")
+torch.save(grid_single_year, f"single_year_infestation_{TARGET_YEAR-YEAR_ZER0}.pt")
+print(f"Grids saved for year {TARGET_YEAR}")
 
-    grid[i, j] = 1  # Mark cell as occupied
-
-grid_inital = grid
-# Save as .pt file
-torch.save(grid, "inital_reference_ldn_map.pt")
-print(f"Grid saved as 'inital_reference_ldn_map.pt' with {N} x {N} cells")
-
-#Getting the final one 
-
-# Initialize an empty N x N grid with zeros
-grid = torch.zeros((N, N), dtype=torch.float32)
-
-# Scale the Easting/Northing values to fit into the N x N grid
-# Normalize the Easting and Northing values to [0, N-1]
-for _, row in df_ldn.iterrows():
-    easting, northing = row["Easting"], row["Northing"]
-
-    # Scale coordinates to fit into the grid (from [min, max] to [0, N-1])
-    i = int((northing - min_north) / height * (N - 1))  # Row index
-    j = int((easting - min_east) / width * (N - 1))    # Column index
-
-    grid[i, j] = 1  # Mark cell as occupied
-
-grid_final = grid
-# Save as .pt file
-torch.save(grid, "final_reference_ldn_map.pt")
-print(f"Grid saved as 'final_reference_ldn_map.pt' with {N} x {N} cells")
-
-if __name__ == "__main__":
-  # Plot initial grid (2006)
-  plot_grid(grid_inital, "Infestation Map - 2006")
-  # Plot final grid (All years)
-  plot_grid(grid_final, "Infestation Map - Final")
-
-
-
+# Plot results
+plot_grid(grid_cumulative, f"Cumulative Infestation Map (2006-{TARGET_YEAR})")
+plot_grid(grid_single_year, f"Single Year Infestation Map ({TARGET_YEAR})")

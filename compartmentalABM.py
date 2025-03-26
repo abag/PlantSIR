@@ -1,4 +1,5 @@
 import torch
+from training import loss_function
 class Grid:
     def __init__(self, N, initial_infection_map, device="cpu"):
         """
@@ -111,23 +112,26 @@ def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N
     zeta_flat = torch.einsum('ij,ij->i', infected_neighbors, sparse_weights)  # Efficient weighted sum
     return zeta_flat.view(N, N)  # Reshape zeta back to grid shape
 
-def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho0, n_timesteps, nearest_ind, nearest_dist, plant_map, tau=0.1):
+def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
+           nearest_ind, nearest_dist, plant_map, ref_infection_maps, training_data, loss_fn, tau=0.1):
     """
     Simulate the random walk with infection spread using the Grid class.
+    Computes loss at specified training timesteps.
     """
     N = grid.N
-    for _ in range(n_timesteps - 1):
+    total_loss = torch.tensor(0.0, device=grid.device, requires_grad=True)  # Initialize total loss
+
+    for t in range(n_timesteps - 1):
         # Compute force of infection
-        #sparse_weights = compute_sparse_weight_matrix(nearest_dist, alpha, beta, sigma)
         sparse_weights = compute_sparse_weight_matrix(nearest_dist, nearest_ind, alpha, beta, sigma, phi, advV, N, nearest_ind.shape[1])
         infected_flat = grid.I.view(-1)  # Flatten grid to (N^2,)
         zeta = compute_force_of_infection(nearest_ind, sparse_weights, infected_flat, N)
 
-        sigmoid_plant = 1.0 / (1 + torch.exp(-l_rho0*(plant_map - rho)))
-        # Modify zeta by the plant map (element-wise multiplication)
-        zeta = zeta * sigmoid_plant
+        sigmoid_plant = 1.0 / (1 + torch.exp(-l_rho * (plant_map - rho)))
+        zeta = zeta * sigmoid_plant  # Modify zeta using plant map
+
         # Compute infection probability (S → I)
-        P_inf = 1 - torch.exp(-zeta) + 1e-10  # Ensure numerical stability
+        P_inf = 1 - torch.exp(-zeta) + 1e-10  # Numerical stability
 
         # Gumbel-Softmax for S → I transitions
         logits_S = torch.stack([P_inf, 1 - P_inf], dim=-1).log()
@@ -136,7 +140,7 @@ def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho0, n_timesteps,
         d_SI = xi * grid.S
 
         # Compute recovery probability (I → R)
-        P_rec = gamma * torch.ones_like(grid.I)  # Create a tensor matching the shape of grid.I
+        P_rec = gamma * torch.ones_like(grid.I)
 
         # Gumbel-Softmax for I → R transitions
         logits_I = torch.stack([P_rec, 1 - P_rec], dim=-1).log()
@@ -145,6 +149,11 @@ def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho0, n_timesteps,
         d_IR = eta * grid.I
 
         # Update the grid
-        grid.update(-d_SI, d_SI - d_IR, d_IR)  # Update S, I, and R compartments
+        grid.update(-d_SI, d_SI - d_IR, d_IR)
 
-    return grid
+        # Compute loss at specified training timesteps
+        if (t + 1) in training_data:  # Match with training timestep
+            ref_map = ref_infection_maps[t + 1]  # Get reference map
+            total_loss = total_loss + loss_function(grid, ref_map, loss_fn)
+
+    return grid, total_loss  # Return total accumulated loss
