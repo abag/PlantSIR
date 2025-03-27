@@ -10,6 +10,44 @@ from compartmentalABM import Grid, runABM
 from training import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device: ", device)
+
+def run_sandpit_mode():
+    from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau
+
+    # Initialize a random infection map
+    #I_0 = torch.rand((N, N), device=device) < 0.05  # 5% random initial infection
+    I_0 = torch.zeros((N, N), device=device)
+    I_0[50,50]=1
+    I_0 = I_0.float()
+    # Initialize the grid
+    grid = Grid(N, I_0, device)
+
+    # Precompute nearest neighbors
+    nearest_ind, nearest_dist = compute_NN(N, M, device=device)
+
+    # Convert parameters to tensors
+    alpha = torch.tensor(alpha0, device=device)
+    beta = torch.tensor(beta0, device=device)
+    sigma = torch.tensor(sigma0, device=device)
+    gamma = torch.tensor(gamma0, device=device)
+    phi = 0.*torch.tensor(phi0, device=device)
+    advV = 0.*torch.tensor(advV0, device=device)
+    rho = 0.*torch.tensor(rho0, device=device)
+    l_rho = torch.tensor(l_rho0, device=device)
+
+    dummy_ref_map = torch.zeros((N, N), device=device)
+    dummy_plant_map = torch.ones((N, N), device=device)
+    # Run the ABM
+    grid, loss = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
+                        nearest_ind, nearest_dist, dummy_plant_map, dummy_ref_map, [0], loss_fn, tau)
+
+    # Plot final infection map
+    plt.figure(figsize=(6, 6))
+    plt.imshow(grid.I.cpu().numpy(), cmap="hot", interpolation="nearest")
+    plt.colorbar(label="Infection Level")
+    plt.title("Final Infection Map (Sandpit Mode)")
+    plt.show()
+
 def run_optimize(num_epoch=1000, num_ensemble=5, lr=0.01):
     from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, training_data, tau
     # Initialize log-parameters so they remain positive.
@@ -353,6 +391,8 @@ def run_beta_sweep():
 
 from params import run_mode
 print(f"Running mode: {run_mode}")
+if run_mode == 'sandpit':
+    run_sandpit_mode()
 if run_mode == 'single_shot':
     run_single_shot()
 if run_mode == 'optimize':

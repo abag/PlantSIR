@@ -1,5 +1,27 @@
 import torch
 from training import loss_function
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+def save_movie_from_frames(frames, filename="infection_simulation.gif"):
+    """
+    Create and save an animation of infection spread as a GIF.
+    """
+    fig, ax = plt.subplots()
+    im = ax.imshow(frames[0], cmap="inferno", vmin=0, vmax=1)  # Set color scale
+    plt.axis("off")  # Remove axes for a cleaner look
+
+    def update(frame):
+        im.set_array(frame)
+        return [im]
+
+    ani = animation.FuncAnimation(fig, update, frames=frames, interval=100)
+
+    # Save as GIF using Pillow
+    ani.save(filename, fps=10, writer="pillow")
+
+    print(f"Movie saved as {filename}")
+
 class Grid:
     def __init__(self, N, initial_infection_map, device="cpu"):
         """
@@ -120,7 +142,8 @@ def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
     """
     N = grid.N
     total_loss = torch.tensor(0.0, device=grid.device, requires_grad=True)  # Initialize total loss
-
+    frames = []
+    save_movie = True
     for t in range(n_timesteps - 1):
         # Compute force of infection
         sparse_weights = compute_sparse_weight_matrix(nearest_dist, nearest_ind, alpha, beta, sigma, phi, advV, N, nearest_ind.shape[1])
@@ -150,10 +173,18 @@ def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
 
         # Update the grid
         grid.update(-d_SI, d_SI - d_IR, d_IR)
+        #SIS model to be added more fomally later
+        #grid.update(-d_SI+d_IR, d_SI - d_IR, torch.zeros_like(grid.I))
 
         # Compute loss at specified training timesteps
         if (t + 1) in training_data:  # Match with training timestep
             ref_map = ref_infection_maps[t + 1]  # Get reference map
             total_loss = total_loss + loss_function(grid, ref_map, loss_fn)
+
+        if save_movie: # Store frame for movie
+          frames.append(grid.I.cpu().numpy())  # Move to CPU before saving
+
+    if save_movie:
+        save_movie_from_frames(frames)
 
     return grid, total_loss  # Return total accumulated loss

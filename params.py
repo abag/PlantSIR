@@ -1,11 +1,11 @@
 # Set the run mode
-run_mode = 'risk_map'
+run_mode = 'sandpit'
 #run_mode = 'latin_hyper_sweep'
 
 # Parameters for all modes
-N = 128
-M = 512
-n_timesteps = 16
+N = 100
+M = 400
+n_timesteps = 100
 tau= 0.1
 #loss function
 loss_fn='lcosh_dice'
