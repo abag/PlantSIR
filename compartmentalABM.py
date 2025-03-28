@@ -1,8 +1,8 @@
 import torch
-from training import loss_function
+from training import loss_function, viral_loss_fn
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-
+from plotting import plot_V_and_Vtrue
 def save_movie_from_frames(frames_I, frames_V, frames_K, filename="infection_simulation.gif"):
     fig, axes = plt.subplots(1, 3, figsize=(12, 4))
 
@@ -118,24 +118,24 @@ class ViralDynamics:
         self.V = V_init.clone().to(device)
         self.K = torch.full((N, N), K_init, device=device, dtype=torch.float32)
 
-    def update(self, delta_I, n_substeps=1, dt=0.1):
+    def update(self, delta_I, viral_a, viral_b, viral_v, n_substeps=1, dt=0.1):
         """
         Evolves viral load (V) and carrying capacity (K)
         """
         # Increase viral load where new infections occur - will need modifying for differentiability
-        self.V = self.V + 0.1 * delta_I
+        self.V = self.V + viral_v * delta_I
 
         if self.evolve:
             for i in range(n_substeps):
                 #Evolution of viral load through coupled ODEs
-                dV_dt = self.V * (1 - self.V / self.K)  # Logistic-like growth
-                dK_dt = -0.1 * self.V * self.K  # Example decay of carrying capacity
+                dV_dt = viral_a * self.V * (1 - self.V / self.K)  # Logistic-like growth
+                dK_dt = -viral_b * self.V * self.K  # decay of carrying capacity
 
-                # Euler's update
-                self.V += dt * dV_dt
-                self.K += dt * dK_dt
-                self.V.clamp_(min=0)  # Ensure V stays positive
-                self.K.clamp_(min=0)  # Ensure K stays positive
+                # Euler update
+                self.V = self.V + dt * dV_dt  #
+                self.K = self.K + dt * dK_dt  #
+                self.V = torch.clamp(self.V, min=0)  #
+                self.K = torch.clamp(self.K, min=0)  #
 
 def compute_sparse_weight_matrix_old(nearest_distances, alpha, beta, sigma):
     """
@@ -194,19 +194,18 @@ def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N
     return zeta_flat.view(N, N)  # Reshape zeta back to grid shape
 
 def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
-           nearest_ind, nearest_dist, plant_map, ref_infection_maps, training_data, loss_fn, tau=0.1):
-    """
-    Simulate the random walk with infection spread using the Grid class.
-    Computes loss at specified training timesteps.
-    """
+           nearest_ind, nearest_dist, plant_map, ref_infection_maps, training_data,
+           loss_fn, viral_a, viral_b, viral_v, tau=0.1):
+    from params import save_movie, viral_evolve
     N = grid.N
     total_loss = torch.tensor(0.0, device=grid.device, requires_grad=True)  # Initialize total loss
     frames_I, frames_V, frames_K = [], [], []
-    save_movie = True
 
-    viral = ViralDynamics(N, grid.I, device=grid.device, evolve=False)
+    V_start = torch.load('richmond_nests_2013.pt', map_location=grid.device)
+    #viral = ViralDynamics(N, grid.I, device=grid.device, evolve=viral_evolve)
+    viral = ViralDynamics(N, V_start, device=grid.device, evolve=viral_evolve)
 
-    for t in range(n_timesteps - 1):
+    for t in range(n_timesteps):
 
         # Compute force of infection
         sparse_weights = compute_sparse_weight_matrix(nearest_dist, nearest_ind, alpha, beta, sigma, phi, advV, N, nearest_ind.shape[1])
@@ -240,17 +239,21 @@ def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
         #grid.update(-d_SI+d_IR, d_SI - d_IR, torch.zeros_like(grid.I))
 
         # Viral update
-        viral.update(d_SI,1,0.1)
+        viral.update(d_SI, viral_a, viral_b, viral_v, 10,0.1)
 
         # Compute loss at specified training timesteps
         if (t + 1) in training_data:  # Match with training timestep
-            ref_map = ref_infection_maps[t + 1]  # Get reference map
-            total_loss = total_loss + loss_function(grid, ref_map, loss_fn)
+            #ref_map = ref_infection_maps[t + 1]  # Get reference map
+            ref_map = ref_infection_maps  # Get reference map
+            plot_V_and_Vtrue(viral.V, ref_map)
+            #total_loss = total_loss + loss_function(grid, ref_map, loss_fn)
+            total_loss = total_loss + viral_loss_fn(ref_map, viral.V)
+            print(total_loss)
 
         if save_movie:
-            frames_I.append(grid.I.cpu().numpy())  # Infected compartment
-            frames_V.append(viral.V.cpu().numpy())  # Viral load
-            frames_K.append(viral.K.cpu().numpy())  # Carrying capacity
+            frames_I.append(grid.I.cpu().detach().numpy())  # Infected compartment
+            frames_V.append(viral.V.cpu().detach().numpy())  # Viral load
+            frames_K.append(viral.K.cpu().detach().numpy())  # Carrying capacity
 
     if save_movie:
         save_movie_from_frames(frames_I, frames_V, frames_K)

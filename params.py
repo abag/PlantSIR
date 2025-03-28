@@ -3,27 +3,36 @@ run_mode = 'sandpit'
 #run_mode = 'latin_hyper_sweep'
 
 # Parameters for all modes
-N = 100
+N = 128
 M = 400
-n_timesteps = 100
+n_timesteps = 1
 tau= 0.1
 #loss function
 loss_fn='lcosh_dice'
 #loss_fn='proportion_infected'
-training_data = [8, 12, 16]
+training_data = [16]
 
 # Parameters for 'single_shot' mode
 alpha0 = 1.9
 beta0 = 0.008
 sigma0 = 5.0
-gamma0 = 0.0003
+gamma0 = 0.03
 phi0 = 0.85
 advV0 = 0.46
 rho0 = 0.08
 l_rho0 = 1.9
 
+# Viral load
+viral_a0 = 0.01
+viral_b0 = 0.01
+viral_v0 = 1.0
+viral_evolve = True #setting this to false and viral_v0=1.0 recovers
+                      #basic SIR model
 # Parameters for risk map
 N_risk=5
+
+#Make a movie?
+save_movie = True
 
 # Bounding box data for loading in external data and map plotting
 min_east, max_east = 470000, 570000

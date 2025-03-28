@@ -127,6 +127,35 @@ def plot_grid_and_ref(grid, initial_infection, ref_infection_map, title_suffix="
 
 import matplotlib.pyplot as plt
 
+def plot_V_and_Vtrue(modelV, realV,hardcopy=False):
+    plt.rcParams['text.usetex'] = True  # Enable LaTeX rendering
+    fig, axes = plt.subplots(1, 2, figsize=(18, 12))
+
+    im0 = axes[0].imshow(modelV.cpu().detach().numpy(), cmap='gray_r')
+    axes[0].set_aspect('equal')
+    axes[0].set_xlabel(r'$x$', fontsize=30)
+    axes[0].set_ylabel(r'$y$', fontsize=30)
+    axes[0].tick_params(axis='both', labelsize=24)
+    cbar0 = plt.colorbar(im0, ax=axes[0])
+    cbar0.ax.tick_params(labelsize=20)
+
+    axes[0].invert_yaxis()
+    # Plot Final Infected (I)
+    im1 = axes[1].imshow(realV.cpu().detach().numpy(), cmap='gray_r')
+    axes[1].set_aspect('equal')
+    axes[1].set_xlabel(r'$x$', fontsize=30)
+    axes[1].set_ylabel(r'$y$', fontsize=30)
+    axes[1].tick_params(axis='both', labelsize=24)
+    axes[1].invert_yaxis()
+    plt.colorbar(im1)
+    plt.tight_layout()
+    if hardcopy:
+        plt.savefig("out.png", dpi=300, bbox_inches='tight')  # Save with high resolution
+        print(f"Plot saved to file out.png")
+        plt.show()
+    else:
+        plt.show()  # Display the plot
+
 def plot_I_start_end(grid, initial_infection,hardcopy=False):
     plt.rcParams['text.usetex'] = True  # Enable LaTeX rendering
     fig, axes = plt.subplots(1, 2, figsize=(18, 12))

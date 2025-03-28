@@ -34,6 +34,11 @@ def load_infection_map(filename,device='cpu'):
 def save_infection_map(infection_map, filename):
     torch.save(infection_map.cpu(), filename)
     print(f"Infection map saved to {filename}")
+def viral_loss_fn(V_true, V_pred):
+    device = V_true.device
+    ssim_fn = SSIM(data_range=1.0).to(device)  # Move SSIM to the same device as the input tensor
+    ssim_score = ssim_fn(V_true.unsqueeze(0).unsqueeze(0), V_pred.unsqueeze(0).unsqueeze(0))
+    return 1 - ssim_score
 def loss_function(grid, ref_infection_map, loss_type="dice"):
     I_pred = grid.I  # The predicted infection map
     I_ref = ref_infection_map  # The reference infection map

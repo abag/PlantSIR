@@ -13,12 +13,10 @@ print("device: ", device)
 
 def run_sandpit_mode():
     from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau
-
+    from params import viral_a0, viral_b0, viral_v0
     # Initialize a random infection map
     #I_0 = torch.rand((N, N), device=device) < 0.05  # 5% random initial infection
-    I_0 = torch.zeros((N, N), device=device)
-    I_0[50,50]=1
-    I_0 = I_0.float()
+    I_0 = load_initial_I(N, device, load_from_file='richmond_I_2013.pt')
     # Initialize the grid
     grid = Grid(N, I_0, device)
 
@@ -26,30 +24,43 @@ def run_sandpit_mode():
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
 
     # Convert parameters to tensors
-    alpha = torch.tensor(alpha0, device=device)
-    beta = torch.tensor(beta0, device=device)
-    sigma = torch.tensor(sigma0, device=device)
-    gamma = torch.tensor(gamma0, device=device)
-    phi = 0.*torch.tensor(phi0, device=device)
-    advV = 0.*torch.tensor(advV0, device=device)
-    rho = 0.*torch.tensor(rho0, device=device)
-    l_rho = torch.tensor(l_rho0, device=device)
+    alpha = torch.tensor(alpha0,requires_grad=True, device=device)
+    beta = torch.tensor(beta0, requires_grad=True, device=device)
+    sigma = torch.tensor(sigma0, requires_grad=True, device=device)
+    gamma = torch.tensor(gamma0, requires_grad=True, device=device)
+    phi = torch.tensor(phi0, requires_grad=True, device=device)
+    advV = torch.tensor(advV0, requires_grad=True, device=device)
+    rho = torch.tensor(rho0, requires_grad=True, device=device)
+    l_rho = torch.tensor(l_rho0, requires_grad=True, device=device)
+    viral_a = torch.tensor(viral_a0, requires_grad=True, device=device)
+    viral_b = torch.tensor(viral_b0, requires_grad=True, device=device)
+    viral_v = torch.tensor(viral_v0, requires_grad=True, device=device)
 
-    dummy_ref_map = torch.zeros((N, N), device=device)
-    dummy_plant_map = torch.ones((N, N), device=device)
+    dummy_ref_map = torch.load('richmond_nests_2014.pt', map_location=device)
+    plant_map = torch.load('richmond_landscape.pt', map_location=device)
     # Run the ABM
     grid, loss = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
-                        nearest_ind, nearest_dist, dummy_plant_map, dummy_ref_map, [0], loss_fn, tau)
+                        nearest_ind, nearest_dist, plant_map, dummy_ref_map, [1],
+                        loss_fn, viral_a, viral_b, viral_v, tau)
+    loss.backward()  # Backpropagate
 
-    # Plot final infection map
-    plt.figure(figsize=(6, 6))
-    plt.imshow(grid.I.cpu().numpy(), cmap="hot", interpolation="nearest")
-    plt.colorbar(label="Infection Level")
-    plt.title("Final Infection Map (Sandpit Mode)")
-    plt.show()
+    # plot_grid_on_map(grid)
+    print(f"Total Loss: {loss.item()}")
+    print(f"Gradient wrt alpha: {alpha.grad}")
+    print(f"Gradient wrt beta: {beta.grad}")
+    print(f"Gradient wrt sigma: {sigma.grad}")
+    print(f"Gradient wrt gamma: {gamma.grad}")
+    print(f"Gradient wrt phi: {phi.grad}")
+    print(f"Gradient wrt advV: {advV.grad}")
+    print(f"Gradient wrt rho: {rho.grad}")
+    print(f"Gradient wrt l_rho: {l_rho.grad}")
+    print(f"Gradient wrt viral a: {viral_a.grad}")
+    print(f"Gradient wrt viral b: {viral_b.grad}")
+    print(f"Gradient wrt viral v: {viral_v.grad}")
 
 def run_optimize(num_epoch=1000, num_ensemble=5, lr=0.01):
     from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, training_data, tau
+    from params import viral_a0, viral_b0, viral_v0
     # Initialize log-parameters so they remain positive.
     log_alpha = torch.tensor(math.log(alpha0), requires_grad=True, device=device)
     log_beta = torch.tensor(math.log(beta0), requires_grad=True, device=device)
@@ -59,12 +70,15 @@ def run_optimize(num_epoch=1000, num_ensemble=5, lr=0.01):
     log_advV = torch.tensor(math.log(advV0), requires_grad=True, device=device)
     log_rho = torch.tensor(math.log(rho0), requires_grad=True, device=device)
     log_l_rho = torch.tensor(math.log(l_rho0), requires_grad=True, device=device)
+    log_viral_a = torch.tensor(math.log(viral_a0), requires_grad=True, device=device)
+    log_viral_b = torch.tensor(math.log(viral_b0), requires_grad=True, device=device)
+    log_viral_v = torch.tensor(math.log(viral_v0), requires_grad=True, device=device)
     # Precompute nearest neighbors once
     nearest_ind, nearest_dist = compute_NN(N, M, device=device)
 
     # Use Adam to optimize the log-parameters
     #optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, log_phi, log_advV, log_rho, log_l_rho], lr=lr)
-    optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, log_advV, log_rho, log_l_rho], lr=lr)
+    optimizer = torch.optim.Adam([log_alpha, log_beta, log_sigma, log_gamma, log_phi, log_advV, log_rho, log_l_rho, log_viral_a , log_viral_b], lr=lr)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
                                                            factor=0.5, patience=50)
@@ -86,12 +100,16 @@ def run_optimize(num_epoch=1000, num_ensemble=5, lr=0.01):
         advV = torch.exp(log_advV)
         rho = torch.exp(log_rho)
         l_rho = torch.exp(log_l_rho)
+        viral_a = torch.exp(log_viral_a)
+        viral_b = torch.exp(log_viral_b)
+        viral_v = torch.exp(log_viral_v)
         # Simulate model and track losses at specific timesteps
         total_loss = 0
         for _ in range(num_ensemble):
           grid = Grid(N, I_0, device)
           grid, loss = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
-                            nearest_ind, nearest_dist, plant_map, ref_infection_maps, training_data, loss_fn, tau)
+                            nearest_ind, nearest_dist, plant_map, ref_infection_maps, training_data,
+                            loss_fn, viral_a, viral_b, viral_v, tau)
           total_loss += loss
         # Backpropagation and optimization step
         total_loss = total_loss / num_ensemble
@@ -99,13 +117,14 @@ def run_optimize(num_epoch=1000, num_ensemble=5, lr=0.01):
         optimizer.step()
         scheduler.step(total_loss.item())
         if epoch % 1 == 0:
-            print(f"Epoch {epoch}: Loss={total_loss.item()}, alpha={alpha.item()}, beta={beta.item()}, sigma={sigma.item()}, gamma={gamma.item()}, phi={phi.item()}, advV={advV.item()}, rho={rho.item()}, l_rho={l_rho.item()}, lr={scheduler.get_last_lr()[0]}")
+            print(f"Epoch {epoch}: Loss={total_loss.item()}, alpha={alpha.item()}, beta={beta.item()}, sigma={sigma.item()}, gamma={gamma.item()}, phi={phi.item()}, advV={advV.item()}, rho={rho.item()}, l_rho={l_rho.item()}, viral_a={viral_a.item()}, viral_b={viral_b.item()}, viral_v={viral_v.item()}, lr={scheduler.get_last_lr()[0]}")
 
     # Return the optimized parameters (converted from log-space)
     return torch.exp(log_alpha).item(), torch.exp(log_beta).item(), torch.exp(log_sigma).item(), torch.exp(log_gamma).item(), phi.item()
 
 def run_single_shot():
     from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau, training_data
+    from params import viral_a0, viral_b0, viral_v0
     alpha = torch.tensor(alpha0, requires_grad=True, device=device)
     beta = torch.tensor(beta0, requires_grad=True, device=device)
     sigma = torch.tensor(sigma0, requires_grad=True, device=device)
@@ -114,7 +133,9 @@ def run_single_shot():
     advV = torch.tensor(advV0, requires_grad=True, device=device)
     rho = torch.tensor(rho0, requires_grad=True, device=device)
     l_rho = torch.tensor(l_rho0, requires_grad=True, device=device)
-
+    viral_a = torch.tensor(viral_a0, requires_grad=True, device=device)
+    viral_b = torch.tensor(viral_b0, requires_grad=True, device=device)
+    viral_v = torch.tensor(viral_v0, requires_grad=True, device=device)
     # Initialize grid with initial infestation
     I_0 = load_initial_I(N, device, load_from_file='inital_reference_ldn_map.pt')
     grid = Grid(N, I_0, device)
@@ -132,7 +153,8 @@ def run_single_shot():
 
     # Simulate model and track losses at specific timesteps
     grid, loss = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
-                         nearest_ind, nearest_dist, plant_map, ref_infection_maps, training_data, loss_fn, tau)
+                         nearest_ind, nearest_dist, plant_map, ref_infection_maps, training_data,
+                         loss_fn, viral_a, viral_b, viral_v, tau)
 
     end_time = time.time()
     run_time = end_time - start_time
@@ -140,6 +162,7 @@ def run_single_shot():
     loss.backward()  # Backpropagate
 
     #plot_grid_on_map(grid)
+    plot_grid_and_ref(grid, I_0, ref_infection_maps[16], title_suffix="")
     print(f"Total Loss: {loss.item()}")
     print(f"Gradient wrt alpha: {alpha.grad}")
     print(f"Gradient wrt beta: {beta.grad}")
@@ -149,7 +172,9 @@ def run_single_shot():
     print(f"Gradient wrt advV: {advV.grad}")
     print(f"Gradient wrt rho: {rho.grad}")
     print(f"Gradient wrt l_rho: {l_rho.grad}")
-
+    print(f"Gradient wrt viral a: {viral_a.grad}")
+    print(f"Gradient wrt viral b: {viral_b.grad}")
+    print(f"Gradient wrt viral v: {viral_v.grad}")
     #save_infection_map(grid.I, 'infection_map.pt')
 
     if torch.cuda.is_available():
