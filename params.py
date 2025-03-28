@@ -5,12 +5,12 @@ run_mode = 'sandpit'
 # Parameters for all modes
 N = 128
 M = 400
-n_timesteps = 1
+n_timesteps = 2
 tau= 0.1
 #loss function
 loss_fn='lcosh_dice'
 #loss_fn='proportion_infected'
-training_data = [16]
+training_data = [1,2]
 
 # Parameters for 'single_shot' mode
 alpha0 = 1.9
@@ -26,8 +26,10 @@ l_rho0 = 1.9
 viral_a0 = 0.01
 viral_b0 = 0.01
 viral_v0 = 1.0
-viral_evolve = True #setting this to false and viral_v0=1.0 recovers
-                      #basic SIR model
+viral_K00 = 6.0
+viral_evolve = True #setting this to false and viral_v0=1.0 recovers basic SIR model
+viral_loss = True
+
 # Parameters for risk map
 N_risk=5
 

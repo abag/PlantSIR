@@ -23,8 +23,8 @@ grid_x, grid_y = np.meshgrid(np.linspace(min(x), max(x), 128),
                              np.linspace(min(y), max(y), 128))
 
 # --- Specify the year you want to analyze ---
-target_year = 2013  # Change this to the desired year
-
+target_year = 2015  # Change this to the desired year
+year_zero = 2013
 # Filter data for the specified year
 mask = year == target_year
 x_filtered = x[mask]
@@ -66,5 +66,5 @@ else:
     nest_map = torch.from_numpy(estimated_nests).to(dtype=torch.float32)
     I_map = torch.from_numpy(estimated_nests).to(dtype=torch.float32)
     # Save to file
-    torch.save(nest_map, f"richmond_nests_{target_year}.pt")
-    torch.save(I_map, f"richmond_I_{target_year}.pt")
+    torch.save(nest_map, f"richmond_nests_{target_year-year_zero}.pt")
+    torch.save(I_map, f"richmond_I_{target_year-year_zero}.pt")

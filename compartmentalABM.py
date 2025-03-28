@@ -1,5 +1,5 @@
 import torch
-from training import loss_function, viral_loss_fn
+from training import loss_function, viral_loss_function
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from plotting import plot_V_and_Vtrue
@@ -116,15 +116,15 @@ class ViralDynamics:
 
         # Initialize V and K as tensors - needs sorting for autodiff
         self.V = V_init.clone().to(device)
-        self.K = torch.full((N, N), K_init, device=device, dtype=torch.float32)
-
-    def update(self, delta_I, viral_a, viral_b, viral_v, n_substeps=1, dt=0.1):
+        #self.K = torch.full((N, N), K_init, device=device, dtype=torch.float32)
+        self.K = K_init.expand(N, N).clone().to(device).requires_grad_()
+    def update(self, delta_I, delta_R, viral_a, viral_b, viral_v, n_substeps=1, dt=0.1):
         """
         Evolves viral load (V) and carrying capacity (K)
         """
         # Increase viral load where new infections occur - will need modifying for differentiability
         self.V = self.V + viral_v * delta_I
-
+        self.V = self.V*(1-delta_R)
         if self.evolve:
             for i in range(n_substeps):
                 #Evolution of viral load through coupled ODEs
@@ -195,15 +195,15 @@ def compute_force_of_infection(nearest_indices, sparse_weights, infected_flat, N
 
 def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
            nearest_ind, nearest_dist, plant_map, ref_infection_maps, training_data,
-           loss_fn, viral_a, viral_b, viral_v, tau=0.1):
-    from params import save_movie, viral_evolve
+           loss_fn, viral_a, viral_b, viral_v, viral_K0, tau=0.1):
+    from params import save_movie, viral_evolve, viral_loss
     N = grid.N
     total_loss = torch.tensor(0.0, device=grid.device, requires_grad=True)  # Initialize total loss
     frames_I, frames_V, frames_K = [], [], []
 
     V_start = torch.load('richmond_nests_2013.pt', map_location=grid.device)
     #viral = ViralDynamics(N, grid.I, device=grid.device, evolve=viral_evolve)
-    viral = ViralDynamics(N, V_start, device=grid.device, evolve=viral_evolve)
+    viral = ViralDynamics(N, V_start, device=grid.device, evolve=viral_evolve, K_init=viral_K0)
 
     for t in range(n_timesteps):
 
@@ -239,15 +239,17 @@ def runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
         #grid.update(-d_SI+d_IR, d_SI - d_IR, torch.zeros_like(grid.I))
 
         # Viral update
-        viral.update(d_SI, viral_a, viral_b, viral_v, 10,0.1)
+        viral.update(d_SI, d_IR, viral_a, viral_b, viral_v, 10,0.1)
 
         # Compute loss at specified training timesteps
         if (t + 1) in training_data:  # Match with training timestep
-            #ref_map = ref_infection_maps[t + 1]  # Get reference map
-            ref_map = ref_infection_maps  # Get reference map
+            ref_map = ref_infection_maps[t + 1]  # Get reference map
             plot_V_and_Vtrue(viral.V, ref_map)
-            #total_loss = total_loss + loss_function(grid, ref_map, loss_fn)
-            total_loss = total_loss + viral_loss_fn(ref_map, viral.V)
+            if viral_loss:
+              total_loss = total_loss + viral_loss_function(ref_map, viral.V)
+            else:
+              total_loss = total_loss + loss_function(grid, ref_map, loss_fn)
+
             print(total_loss)
 
         if save_movie:

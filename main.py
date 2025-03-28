@@ -12,8 +12,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device: ", device)
 
 def run_sandpit_mode():
-    from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau
-    from params import viral_a0, viral_b0, viral_v0
+    from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, tau, training_data
+    from params import viral_a0, viral_b0, viral_v0, viral_K00
     # Initialize a random infection map
     #I_0 = torch.rand((N, N), device=device) < 0.05  # 5% random initial infection
     I_0 = load_initial_I(N, device, load_from_file='richmond_I_2013.pt')
@@ -35,13 +35,14 @@ def run_sandpit_mode():
     viral_a = torch.tensor(viral_a0, requires_grad=True, device=device)
     viral_b = torch.tensor(viral_b0, requires_grad=True, device=device)
     viral_v = torch.tensor(viral_v0, requires_grad=True, device=device)
+    viral_K0 = torch.tensor(viral_K00, requires_grad=True, device=device)
 
-    dummy_ref_map = torch.load('richmond_nests_2014.pt', map_location=device)
+    ref_infection_maps = {t: load_infection_map(f'richmond_nests_{t}.pt', device=device) for t in training_data}
     plant_map = torch.load('richmond_landscape.pt', map_location=device)
     # Run the ABM
     grid, loss = runABM(grid, alpha, beta, sigma, gamma, phi, advV, rho, l_rho, n_timesteps,
-                        nearest_ind, nearest_dist, plant_map, dummy_ref_map, [1],
-                        loss_fn, viral_a, viral_b, viral_v, tau)
+                        nearest_ind, nearest_dist, plant_map, ref_infection_maps, training_data,
+                        loss_fn, viral_a, viral_b, viral_v, viral_K0 , tau)
     loss.backward()  # Backpropagate
 
     # plot_grid_on_map(grid)
@@ -57,6 +58,7 @@ def run_sandpit_mode():
     print(f"Gradient wrt viral a: {viral_a.grad}")
     print(f"Gradient wrt viral b: {viral_b.grad}")
     print(f"Gradient wrt viral v: {viral_v.grad}")
+    print(f"Gradient wrt viral K(0): {viral_K0.grad}")
 
 def run_optimize(num_epoch=1000, num_ensemble=5, lr=0.01):
     from params import N, M, n_timesteps, loss_fn, alpha0, beta0, sigma0, gamma0, phi0, advV0, rho0, l_rho0, training_data, tau
